@@ -61,6 +61,35 @@
             box-shadow: 0 2px 5px rgba(0,0,0,0.2);
         }
 
+        .size-selector {
+            background: rgba(255, 255, 255, 0.2);
+            backdrop-filter: blur(10px);
+            padding: 15px 30px;
+            border-radius: 15px;
+            margin-bottom: 15px;
+            display: inline-block;
+            margin-left: 10px;
+        }
+
+        .size-selector label {
+            color: white;
+            font-size: 1.1em;
+            font-weight: bold;
+            margin-right: 10px;
+        }
+
+        .size-selector select {
+            padding: 8px 15px;
+            font-size: 1em;
+            border-radius: 8px;
+            border: none;
+            background: white;
+            color: #667eea;
+            font-weight: bold;
+            cursor: pointer;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+        }
+
         .stats {
             background: rgba(255, 255, 255, 0.2);
             backdrop-filter: blur(10px);
@@ -79,7 +108,6 @@
 
         .game-board {
             display: grid;
-            grid-template-columns: repeat(5, 1fr);
             gap: 10px;
             max-width: 600px;
             margin: 0 auto 20px;
@@ -229,9 +257,20 @@
             </select>
         </div>
 
+        <div class="size-selector">
+            <label for="sizeSelect">Grid Size:</label>
+            <select id="sizeSelect" onchange="initGame()">
+                <option value="3x4">3x4</option>
+                <option value="4x4">4x4</option>
+                <option value="4x5">4x5</option>
+                <option value="5x6">5x6</option>
+                <option value="6x6">6x6</option>
+            </select>
+        </div>
+
         <div class="stats">
             <span>Moves: <span id="moves">0</span></span>
-            <span>Matches: <span id="matches">0</span> / 12</span>
+            <span>Matches: <span id="matches">0</span> / <span id="totalMatches">0</span></span>
         </div>
 
         <div class="game-board" id="gameBoard"></div>
@@ -247,21 +286,35 @@
 
     <script>
         const themes = {
-            fruits: ['🍎', '🍌', '🍇', '🍊', '🍓', '🍒', '🍑', '🥝', '🍉', '🍍', '🥭', '🍐'],
-            dinosaurs: ['🦕', '🦖', '🦴', '🦎', '🐊', '🐢', '🦏', '🦘', '🐉', '🦤', '🐲', '🦒'],
-            trucks: ['🚚', '🚛', '🚜', '🚗', '🚙', '🚕', '🚐', '🚒', '🚓', '🚑', '🏎️', '🚌'],
-            space: ['🚀', '🛸', '🌟', '⭐', '🌙', '🪐', '🌍', '👽', '🛰️', '☄️', '🌌', '🔭']
+            fruits: ['🍎', '🍌', '🍇', '🍊', '🍓', '🍒', '🍑', '🥝', '🍉', '🍍', '🥭', '🍐', '🥥', '🍋', '🫐', '🍈', '🥑', '🍅'],
+            dinosaurs: ['🦕', '🦖', '🦴', '🦎', '🐊', '🐢', '🦏', '🦘', '🐉', '🦤', '🐲', '🦒', '🐍', '🦎', '🐸', '🦂', '🕷️', '🦗'],
+            trucks: ['🚚', '🚛', '🚜', '🚗', '🚙', '🚕', '🚐', '🚒', '🚓', '🚑', '🏎️', '🚌', '🚎', '🏍️', '🛵', '🚲', '🛴', '🚂'],
+            space: ['🚀', '🛸', '🌟', '⭐', '🌙', '🪐', '🌍', '👽', '🛰️', '☄️', '🌌', '🔭', '🌠', '🌕', '🌎', '🌏', '☀️', '✨']
+        };
+
+        const gridSizes = {
+            '3x4': { rows: 4, cols: 3, pairs: 6 },
+            '4x4': { rows: 4, cols: 4, pairs: 8 },
+            '4x5': { rows: 5, cols: 4, pairs: 10 },
+            '5x6': { rows: 6, cols: 5, pairs: 15 },
+            '6x6': { rows: 6, cols: 6, pairs: 18 }
         };
         
         let cards = [];
         let flippedCards = [];
         let moves = 0;
         let matches = 0;
+        let totalPairs = 0;
         let canFlip = true;
 
         function getCurrentTheme() {
             const select = document.getElementById('themeSelect');
             return themes[select.value];
+        }
+
+        function getCurrentGridSize() {
+            const select = document.getElementById('sizeSelect');
+            return gridSizes[select.value];
         }
 
         function getRandomTheme() {
@@ -292,19 +345,24 @@
             matches = 0;
             canFlip = true;
             
+            const gridSize = getCurrentGridSize();
+            const symbols = getCurrentTheme();
+            totalPairs = gridSize.pairs;
+
+            // Set up the grid
+            gameBoard.style.gridTemplateColumns = `repeat(${gridSize.cols}, 1fr)`;
+            gameBoard.style.gridTemplateRows = `repeat(${gridSize.rows}, 1fr)`;
+            
             document.getElementById('moves').textContent = '0';
             document.getElementById('matches').textContent = '0';
+            document.getElementById('totalMatches').textContent = totalPairs;
             document.getElementById('winMessage').classList.remove('show');
 
-            const symbols = getCurrentTheme();
-
-            // Create pairs - we need 12 pairs plus 1 extra card (25 total)
-            // We'll use 12 pairs and leave the 25th card with a duplicate
+            // Create pairs
             const cardSymbols = [];
-            for (let i = 0; i < 12; i++) {
+            for (let i = 0; i < gridSize.pairs; i++) {
                 cardSymbols.push(symbols[i], symbols[i]);
             }
-            cardSymbols.push(symbols[0]); // Add one more to make 25
 
             cards = shuffle(cardSymbols);
 
@@ -334,8 +392,6 @@
 
             if (flippedCards.length === 2) {
                 canFlip = false;
-                moves++;
-                document.getElementById('moves').textContent = moves;
                 checkMatch();
             }
         }
@@ -346,6 +402,7 @@
             const symbol2 = card2.dataset.symbol;
 
             if (symbol1 === symbol2) {
+                // Match found - don't increment moves
                 setTimeout(() => {
                     card1.classList.add('matched');
                     card2.classList.add('matched');
@@ -355,11 +412,15 @@
                     flippedCards = [];
                     canFlip = true;
 
-                    if (matches === 12) {
+                    if (matches === totalPairs) {
                         setTimeout(() => showWinMessage(), 500);
                     }
                 }, 500);
             } else {
+                // No match - increment moves
+                moves++;
+                document.getElementById('moves').textContent = moves;
+                
                 setTimeout(() => {
                     card1.classList.remove('flipped');
                     card2.classList.remove('flipped');
