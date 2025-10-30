@@ -219,6 +219,15 @@
     <div class="container">
         <h1>Memory Game</h1>
         
+        <div class="theme-selector">
+            <label for="themeSelect">Choose Theme:</label>
+            <select id="themeSelect" onchange="initGame()">
+                <option value="fruits">🍎 Fruits</option>
+                <option value="dinosaurs">🦕 Dinosaurs</option>
+                <option value="trucks">🚚 Trucks</option>
+            </select>
+        </div>
+
         <div class="stats">
             <span>Moves: <span id="moves">0</span></span>
             <span>Matches: <span id="matches">0</span> / 12</span>
@@ -236,12 +245,22 @@
     </div>
 
     <script>
-        const symbols = ['🍎', '🍌', '🍇', '🍊', '🍓', '🍒', '🍑', '🥝', '🍉', '🍍', '🥭', '🍐'];
+        const themes = {
+            fruits: ['🍎', '🍌', '🍇', '🍊', '🍓', '🍒', '🍑', '🥝', '🍉', '🍍', '🥭', '🍐'],
+            dinosaurs: ['🦕', '🦖', '🦴', '🥚', '🌋', '🌿', '🦎', '🐊', '🦘', '🐢', '🦏', '🐉'],
+            trucks: ['🚚', '🚛', '🚜', '🚗', '🚙', '🚕', '🚐', '🚒', '🚓', '🚑', '🏎️', '🚌']
+        };
+        
         let cards = [];
         let flippedCards = [];
         let moves = 0;
         let matches = 0;
         let canFlip = true;
+
+        function getCurrentTheme() {
+            const select = document.getElementById('themeSelect');
+            return themes[select.value];
+        }
 
         function shuffle(array) {
             const arr = [...array];
@@ -263,6 +282,8 @@
             document.getElementById('moves').textContent = '0';
             document.getElementById('matches').textContent = '0';
             document.getElementById('winMessage').classList.remove('show');
+
+            const symbols = getCurrentTheme();
 
             // Create pairs - we need 12 pairs plus 1 extra card (25 total)
             // We'll use 12 pairs and leave the 25th card with a duplicate
