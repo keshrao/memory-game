@@ -225,6 +225,7 @@
                 <option value="fruits">🍎 Fruits</option>
                 <option value="dinosaurs">🦕 Dinosaurs</option>
                 <option value="trucks">🚚 Trucks</option>
+                <option value="space">🚀 Space</option>
             </select>
         </div>
 
@@ -261,6 +262,17 @@
         function getCurrentTheme() {
             const select = document.getElementById('themeSelect');
             return themes[select.value];
+        }
+
+        function getRandomTheme() {
+            const themeKeys = Object.keys(themes);
+            const randomIndex = Math.floor(Math.random() * themeKeys.length);
+            return themeKeys[randomIndex];
+        }
+
+        function setRandomTheme() {
+            const select = document.getElementById('themeSelect');
+            select.value = getRandomTheme();
         }
 
         function shuffle(array) {
@@ -362,6 +374,7 @@
             document.getElementById('winMessage').classList.add('show');
         }
 
+        setRandomTheme();
         initGame();
     </script>
 </body>
