@@ -154,12 +154,7 @@ class MemoryGameSimulator:
             print(f"Total pairs matched: {len(self.matched) // 2}")
             print(f"Total turns taken: {self.moves + self.perfect_matches}")
             
-            # Calculate efficiency
-            min_possible_moves = self.total_pairs - 1  # Best case: all but one pair are lucky
-            print(f"\nMinimum possible wrong moves: {min_possible_moves}")
-            print(f"Efficiency: {self.moves} wrong moves for {self.total_pairs} pairs")
-            print(f"{'='*60}\n")
-        
+
         return self.moves
 
 
@@ -214,4 +209,4 @@ if __name__ == "__main__":
     
     # Run multiple simulations for different board sizes
     for size_name, (rows, cols) in board_sizes.items():
-        run_simulations(rows, cols, num_games=1000, verbose=VERBOSE)
+        run_simulations(rows, cols, num_games=100000, verbose=VERBOSE)
