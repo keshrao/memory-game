@@ -33,6 +33,34 @@
             text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
         }
 
+        .mode-selector {
+            background: rgba(255, 255, 255, 0.2);
+            backdrop-filter: blur(10px);
+            padding: 15px 30px;
+            border-radius: 15px;
+            margin-bottom: 15px;
+            display: inline-block;
+        }
+
+        .mode-selector label {
+            color: white;
+            font-size: 1.1em;
+            font-weight: bold;
+            margin-right: 10px;
+        }
+
+        .mode-selector select {
+            padding: 8px 15px;
+            font-size: 1em;
+            border-radius: 8px;
+            border: none;
+            background: white;
+            color: #667eea;
+            font-weight: bold;
+            cursor: pointer;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+        }
+
         .theme-selector {
             background: rgba(255, 255, 255, 0.2);
             backdrop-filter: blur(10px);
@@ -106,6 +134,22 @@
             margin: 0 15px;
         }
 
+        .turn-indicator {
+            background: rgba(255, 255, 255, 0.3);
+            backdrop-filter: blur(10px);
+            padding: 10px 25px;
+            border-radius: 10px;
+            margin-bottom: 15px;
+            display: inline-block;
+            min-width: 180px;
+        }
+
+        .turn-indicator span {
+            color: white;
+            font-size: 1.1em;
+            font-weight: bold;
+        }
+
         .game-board {
             display: grid;
             gap: 10px;
@@ -141,6 +185,11 @@
             pointer-events: none;
             transform: scale(0);
             transition: opacity 0.5s ease, transform 0.5s ease;
+        }
+
+        .card.disabled {
+            cursor: not-allowed;
+            opacity: 0.7;
         }
 
         .card-face {
@@ -199,6 +248,7 @@
             text-align: center;
             display: none;
             z-index: 1000;
+            max-width: 90%;
         }
 
         .win-message.show {
@@ -224,7 +274,48 @@
         .win-message p {
             color: #666;
             font-size: 1.3em;
-            margin-bottom: 30px;
+            margin-bottom: 10px;
+        }
+
+        .score-text {
+            background: #f0f0f0;
+            padding: 15px;
+            border-radius: 10px;
+            margin: 20px 0;
+            font-family: monospace;
+            font-size: 1em;
+            color: #333;
+            white-space: pre-line;
+            text-align: left;
+        }
+
+        .button-group {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            margin-top: 20px;
+        }
+
+        .copy-btn {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 12px 30px;
+            font-size: 1em;
+            font-weight: bold;
+            border-radius: 50px;
+            cursor: pointer;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+            transition: all 0.3s ease;
+        }
+
+        .copy-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(0,0,0,0.3);
+        }
+
+        .copy-btn.copied {
+            background: #4CAF50;
         }
 
         @media (max-width: 600px) {
@@ -240,6 +331,18 @@
             h1 {
                 font-size: 2em;
             }
+
+            .win-message {
+                padding: 30px 40px;
+            }
+
+            .win-message h2 {
+                font-size: 2em;
+            }
+
+            .win-message p {
+                font-size: 1.1em;
+            }
         }
     </style>
 </head>
@@ -247,8 +350,16 @@
     <div class="container">
         <h1>Memory Game</h1>
         
+        <div class="mode-selector">
+            <label for="modeSelect">Game Mode:</label>
+            <select id="modeSelect" onchange="initGame()">
+                <option value="solo">Solo</option>
+                <option value="vs">VS Computer</option>
+            </select>
+        </div>
+
         <div class="theme-selector">
-            <label for="themeSelect">Choose Theme:</label>
+            <label for="themeSelect">Theme:</label>
             <select id="themeSelect" onchange="initGame()">
                 <option value="fruits">🍎 Fruits</option>
                 <option value="dinosaurs">🦕 Dinosaurs</option>
@@ -269,9 +380,19 @@
             </select>
         </div>
 
-        <div class="stats">
-            <span>Moves: <span id="moves">0</span></span>
-            <span>Matches: <span id="matches">0</span> / <span id="totalMatches">0</span></span>
+        <div class="turn-indicator" id="turnIndicator" style="display: none;">
+            <span id="turnText">Your Turn</span>
+        </div>
+
+        <div class="stats" id="stats">
+            <span id="soloStats">
+                <span>Moves: <span id="moves">0</span></span>
+                <span>Time: <span id="timer">0:00</span></span>
+            </span>
+            <span id="vsStats" style="display: none;">
+                <span>You: <span id="playerScore">0</span></span>
+                <span>Computer: <span id="computerScore">0</span></span>
+            </span>
         </div>
 
         <div class="game-board" id="gameBoard"></div>
@@ -280,9 +401,13 @@
     </div>
 
     <div class="win-message" id="winMessage">
-        <h2>🎉 Congratulations!</h2>
-        <p>You won in <span id="finalMoves"></span> moves!</p>
-        <button class="restart-btn" onclick="initGame()">Play Again</button>
+        <h2 id="winTitle">🎉 Congratulations!</h2>
+        <div id="winContent"></div>
+        <div class="score-text" id="scoreText"></div>
+        <div class="button-group">
+            <button class="copy-btn" id="copyBtn" onclick="copyScore()">Copy Score</button>
+            <button class="restart-btn" onclick="initGame()">Play Again</button>
+        </div>
     </div>
 
     <script>
@@ -305,9 +430,16 @@
         let cards = [];
         let flippedCards = [];
         let moves = 0;
-        let matches = 0;
         let totalPairs = 0;
         let canFlip = true;
+        let gameMode = 'solo';
+        let currentPlayer = 'human';
+        let playerMatches = 0;
+        let computerMatches = 0;
+        let computerMemory = {};
+        let startTime = null;
+        let timerInterval = null;
+        let finalScoreText = '';
 
         function getCurrentTheme() {
             const select = document.getElementById('themeSelect');
@@ -325,9 +457,20 @@
             return themeKeys[randomIndex];
         }
 
+        function getRandomGridSize() {
+            const sizeKeys = Object.keys(gridSizes);
+            const randomIndex = Math.floor(Math.random() * sizeKeys.length);
+            return sizeKeys[randomIndex];
+        }
+
         function setRandomTheme() {
             const select = document.getElementById('themeSelect');
             select.value = getRandomTheme();
+        }
+
+        function setRandomGridSize() {
+            const select = document.getElementById('sizeSelect');
+            select.value = getRandomGridSize();
         }
 
         function shuffle(array) {
@@ -339,25 +482,90 @@
             return arr;
         }
 
+        function startTimer() {
+            startTime = Date.now();
+            timerInterval = setInterval(updateTimer, 1000);
+        }
+
+        function updateTimer() {
+            const elapsed = Math.floor((Date.now() - startTime) / 1000);
+            const minutes = Math.floor(elapsed / 60);
+            const seconds = elapsed % 60;
+            document.getElementById('timer').textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+        }
+
+        function stopTimer() {
+            if (timerInterval) {
+                clearInterval(timerInterval);
+                timerInterval = null;
+            }
+        }
+
+        function getElapsedTime() {
+            const elapsed = Math.floor((Date.now() - startTime) / 1000);
+            const minutes = Math.floor(elapsed / 60);
+            const seconds = elapsed % 60;
+            return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+        }
+
+        function updateTurnIndicator() {
+            const indicator = document.getElementById('turnIndicator');
+            const turnText = document.getElementById('turnText');
+            
+            if (gameMode === 'vs') {
+                indicator.style.display = 'inline-block';
+                turnText.textContent = currentPlayer === 'human' ? 'Your Turn' : 'Computer Turn';
+            } else {
+                indicator.style.display = 'none';
+            }
+        }
+
         function initGame() {
             const gameBoard = document.getElementById('gameBoard');
             gameBoard.innerHTML = '';
             flippedCards = [];
             moves = 0;
-            matches = 0;
+            playerMatches = 0;
+            computerMatches = 0;
+            computerMemory = {};
             canFlip = true;
             
+            stopTimer();
+            
+            gameMode = document.getElementById('modeSelect').value;
             const gridSize = getCurrentGridSize();
             const symbols = getCurrentTheme();
             totalPairs = gridSize.pairs;
+
+            // Randomly decide who starts in VS mode
+            if (gameMode === 'vs') {
+                currentPlayer = Math.random() < 0.5 ? 'human' : 'computer';
+            } else {
+                currentPlayer = 'human';
+            }
 
             // Set up the grid
             gameBoard.style.gridTemplateColumns = `repeat(${gridSize.cols}, 1fr)`;
             gameBoard.style.gridTemplateRows = `repeat(${gridSize.rows}, 1fr)`;
             
-            document.getElementById('moves').textContent = '0';
-            document.getElementById('matches').textContent = '0';
-            document.getElementById('totalMatches').textContent = totalPairs;
+            // Update UI based on mode
+            const soloStats = document.getElementById('soloStats');
+            const vsStats = document.getElementById('vsStats');
+            
+            if (gameMode === 'solo') {
+                soloStats.style.display = '';
+                vsStats.style.display = 'none';
+                document.getElementById('moves').textContent = '0';
+                document.getElementById('timer').textContent = '0:00';
+                startTimer();
+            } else {
+                soloStats.style.display = 'none';
+                vsStats.style.display = '';
+                document.getElementById('playerScore').textContent = '0';
+                document.getElementById('computerScore').textContent = '0';
+            }
+            
+            updateTurnIndicator();
             document.getElementById('winMessage').classList.remove('show');
 
             // Create pairs
@@ -382,6 +590,11 @@
                 card.addEventListener('click', () => flipCard(card));
                 gameBoard.appendChild(card);
             });
+
+            // If computer starts, trigger computer turn
+            if (gameMode === 'vs' && currentPlayer === 'computer') {
+                setTimeout(computerTurn, 1000);
+            }
         }
 
         function flipCard(card) {
@@ -389,8 +602,20 @@
                 return;
             }
 
+            // In VS mode, only allow flipping if it's human's turn
+            if (gameMode === 'vs' && currentPlayer !== 'human') {
+                return;
+            }
+
             card.classList.add('flipped');
             flippedCards.push(card);
+
+            // Store in computer memory in VS mode
+            if (gameMode === 'vs') {
+                const index = card.dataset.index;
+                const symbol = card.dataset.symbol;
+                computerMemory[index] = symbol;
+            }
 
             if (flippedCards.length === 2) {
                 canFlip = false;
@@ -404,40 +629,213 @@
             const symbol2 = card2.dataset.symbol;
 
             if (symbol1 === symbol2) {
-                // Match found - don't increment moves
+                // Match found
                 setTimeout(() => {
                     card1.classList.add('matched');
                     card2.classList.add('matched');
-                    matches++;
-                    document.getElementById('matches').textContent = matches;
+                    
+                    if (gameMode === 'solo') {
+                        moves++;
+                    } else {
+                        if (currentPlayer === 'human') {
+                            playerMatches++;
+                            document.getElementById('playerScore').textContent = playerMatches;
+                        } else {
+                            computerMatches++;
+                            document.getElementById('computerScore').textContent = computerMatches;
+                        }
+                    }
                     
                     flippedCards = [];
                     canFlip = true;
 
-                    if (matches === totalPairs) {
+                    const totalMatches = gameMode === 'solo' ? moves : (playerMatches + computerMatches);
+                    if (totalMatches === totalPairs) {
                         setTimeout(() => showWinMessage(), 500);
+                    } else if (gameMode === 'vs') {
+                        // Same player goes again after a match
+                        if (currentPlayer === 'computer') {
+                            setTimeout(computerTurn, 1000);
+                        }
                     }
                 }, 500);
             } else {
-                // No match - increment moves
-                moves++;
-                document.getElementById('moves').textContent = moves;
+                // No match
+                if (gameMode === 'solo') {
+                    moves++;
+                    document.getElementById('moves').textContent = moves;
+                }
                 
                 setTimeout(() => {
                     card1.classList.remove('flipped');
                     card2.classList.remove('flipped');
                     flippedCards = [];
                     canFlip = true;
+
+                    // Switch players in VS mode
+                    if (gameMode === 'vs') {
+                        currentPlayer = currentPlayer === 'human' ? 'computer' : 'human';
+                        updateTurnIndicator();
+                        
+                        if (currentPlayer === 'computer') {
+                            setTimeout(computerTurn, 1000);
+                        }
+                    }
                 }, 1000);
             }
         }
 
+        function computerTurn() {
+            if (currentPlayer !== 'computer' || !canFlip) return;
+
+            // Get all unmatched cards
+            const allCards = document.querySelectorAll('.card:not(.matched)');
+            
+            // Check if computer knows any matching pairs
+            const knownPairs = findKnownPair();
+            
+            let card1, card2;
+            
+            if (knownPairs) {
+                // Computer knows a match!
+                [card1, card2] = knownPairs;
+            } else {
+                // Pick two cards the computer hasn't seen yet, or random if all seen
+                const unseenCards = Array.from(allCards).filter(c => !computerMemory[c.dataset.index]);
+                
+                if (unseenCards.length >= 2) {
+                    card1 = unseenCards[0];
+                    card2 = unseenCards[1];
+                } else if (unseenCards.length === 1) {
+                    card1 = unseenCards[0];
+                    const otherCards = Array.from(allCards).filter(c => c !== card1);
+                    card2 = otherCards[Math.floor(Math.random() * otherCards.length)];
+                } else {
+                    // All cards seen, pick randomly
+                    const cardsArray = Array.from(allCards);
+                    card1 = cardsArray[Math.floor(Math.random() * cardsArray.length)];
+                    const remaining = cardsArray.filter(c => c !== card1);
+                    card2 = remaining[Math.floor(Math.random() * remaining.length)];
+                }
+            }
+
+            // Flip first card
+            setTimeout(() => {
+                card1.classList.add('flipped');
+                flippedCards.push(card1);
+                computerMemory[card1.dataset.index] = card1.dataset.symbol;
+
+                // Flip second card
+                setTimeout(() => {
+                    card2.classList.add('flipped');
+                    flippedCards.push(card2);
+                    computerMemory[card2.dataset.index] = card2.dataset.symbol;
+                    
+                    canFlip = false;
+                    checkMatch();
+                }, 600);
+            }, 400);
+        }
+
+        function findKnownPair() {
+            const allCards = document.querySelectorAll('.card:not(.matched)');
+            const symbolLocations = {};
+
+            // Build a map of symbols to their card elements
+            for (const card of allCards) {
+                const index = card.dataset.index;
+                if (computerMemory[index] !== undefined) {
+                    const symbol = computerMemory[index];
+                    if (!symbolLocations[symbol]) {
+                        symbolLocations[symbol] = [];
+                    }
+                    symbolLocations[symbol].push(card);
+                }
+            }
+
+            // Find a symbol that appears twice
+            for (const symbol in symbolLocations) {
+                if (symbolLocations[symbol].length >= 2) {
+                    return [symbolLocations[symbol][0], symbolLocations[symbol][1]];
+                }
+            }
+
+            return null;
+        }
+
         function showWinMessage() {
-            document.getElementById('finalMoves').textContent = moves;
+            stopTimer();
+            
+            const winTitle = document.getElementById('winTitle');
+            const winContent = document.getElementById('winContent');
+            const scoreTextEl = document.getElementById('scoreText');
+            
+            if (gameMode === 'solo') {
+                const elapsedTime = getElapsedTime();
+                const gridSize = document.getElementById('sizeSelect').value;
+                const theme = document.getElementById('themeSelect').options[document.getElementById('themeSelect').selectedIndex].text;
+                
+                winTitle.textContent = '🎉 Congratulations!';
+                winContent.innerHTML = `
+                    <p>You completed the game!</p>
+                    <p>Time: ${elapsedTime}</p>
+                    <p>Moves: ${moves}</p>
+                `;
+                
+                finalScoreText = `Memory Game - Solo Mode
+Grid: ${gridSize}
+Theme: ${theme}
+Time: ${elapsedTime}
+Moves: ${moves}`;
+            } else {
+                const gridSize = document.getElementById('sizeSelect').value;
+                const theme = document.getElementById('themeSelect').options[document.getElementById('themeSelect').selectedIndex].text;
+                
+                if (playerMatches > computerMatches) {
+                    winTitle.textContent = '🎉 You Win!';
+                } else if (computerMatches > playerMatches) {
+                    winTitle.textContent = '🤖 Computer Wins!';
+                } else {
+                    winTitle.textContent = '🤝 Tie Game!';
+                }
+                
+                winContent.innerHTML = `
+                    <p>Final Score:</p>
+                    <p>You: ${playerMatches}</p>
+                    <p>Computer: ${computerMatches}</p>
+                `;
+                
+                finalScoreText = `Memory Game - VS Computer
+Grid: ${gridSize}
+Theme: ${theme}
+Final Score:
+  You: ${playerMatches}
+  Computer: ${computerMatches}
+Result: ${playerMatches > computerMatches ? 'You Win!' : computerMatches > playerMatches ? 'Computer Wins!' : 'Tie!'}`;
+            }
+            
+            scoreTextEl.textContent = finalScoreText;
             document.getElementById('winMessage').classList.add('show');
         }
 
+        function copyScore() {
+            navigator.clipboard.writeText(finalScoreText).then(() => {
+                const btn = document.getElementById('copyBtn');
+                const originalText = btn.textContent;
+                btn.textContent = '✓ Copied!';
+                btn.classList.add('copied');
+                
+                setTimeout(() => {
+                    btn.textContent = originalText;
+                    btn.classList.remove('copied');
+                }, 2000);
+            }).catch(err => {
+                alert('Failed to copy to clipboard');
+            });
+        }
+
         setRandomTheme();
+        setRandomGridSize();
         initGame();
     </script>
 </body>
