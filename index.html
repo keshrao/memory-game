@@ -767,18 +767,15 @@
             if (roomData.matchedCards) {
                 const allMatched = new Set(roomData.matchedCards);
 
-                // Show any new matched cards with a brief flip before hiding
                 allMatched.forEach(index => {
                     const card = document.querySelector(`[data-index="${index}"]`);
                     if (card && !card.classList.contains('matched')) {
-                        // Flip to show symbol first
+                         // briefly flip them to show what your friend found
                         card.classList.add('flipped');
-
-                        // After 800ms, hide the cards as matched
                         setTimeout(() => {
                             card.classList.add('matched');
                             card.classList.remove('flipped');
-                        }, 800);
+                        }, 800); // 0.8 seconds delay before they disappear
                     }
                 });
             }
