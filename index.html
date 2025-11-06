@@ -354,7 +354,9 @@
             <label for="modeSelect">Game Mode:</label>
             <select id="modeSelect" onchange="initGame()">
                 <option value="solo">Solo</option>
-                <option value="vs">VS Computer</option>
+                <option value="vs-easy">VS Easy Computer</option>
+                <option value="vs-medium">VS Medium Computer</option>
+                <option value="vs-hard">VS Hard Computer</option>
             </select>
         </div>
 
@@ -437,6 +439,9 @@
         let playerMatches = 0;
         let computerMatches = 0;
         let computerMemory = {};
+        let computerMemoryTurns = {}; // Track when each card was seen (for Easy mode)
+        let turnNumber = 0;
+        let difficulty = 'medium';
         let startTime = null;
         let timerInterval = null;
         let finalScoreText = '';
@@ -528,11 +533,25 @@
             playerMatches = 0;
             computerMatches = 0;
             computerMemory = {};
+            computerMemoryTurns = {};
+            turnNumber = 0;
             canFlip = true;
             
             stopTimer();
             
-            gameMode = document.getElementById('modeSelect').value;
+            const modeSelect = document.getElementById('modeSelect').value;
+            
+            // Parse mode and difficulty
+            if (modeSelect === 'solo') {
+                gameMode = 'solo';
+                difficulty = null;
+            } else {
+                gameMode = 'vs';
+                if (modeSelect === 'vs-easy') difficulty = 'easy';
+                else if (modeSelect === 'vs-medium') difficulty = 'medium';
+                else if (modeSelect === 'vs-hard') difficulty = 'hard';
+            }
+            
             const gridSize = getCurrentGridSize();
             const symbols = getCurrentTheme();
             totalPairs = gridSize.pairs;
@@ -615,6 +634,7 @@
                 const index = card.dataset.index;
                 const symbol = card.dataset.symbol;
                 computerMemory[index] = symbol;
+                computerMemoryTurns[index] = turnNumber;
             }
 
             if (flippedCards.length === 2) {
@@ -660,7 +680,9 @@
                     }
                 }, 500);
             } else {
-                // No match
+                // No match - increment turn number
+                turnNumber++;
+                
                 if (gameMode === 'solo') {
                     moves++;
                     document.getElementById('moves').textContent = moves;
@@ -688,20 +710,46 @@
         function computerTurn() {
             if (currentPlayer !== 'computer' || !canFlip) return;
 
-            // Get all unmatched cards
+            if (difficulty === 'hard') {
+                computerTurnHard();
+            } else if (difficulty === 'medium') {
+                computerTurnMedium();
+            } else {
+                computerTurnEasy();
+            }
+        }
+
+        function getComputerMemory() {
+            if (difficulty === 'easy') {
+                // Easy mode: forget cards seen more than 4 turns ago
+                const recentMemory = {};
+                for (const [index, symbol] of Object.entries(computerMemory)) {
+                    if (turnNumber - computerMemoryTurns[index] <= 4) {
+                        recentMemory[index] = symbol;
+                    }
+                }
+                return recentMemory;
+            } else {
+                // Medium and Hard: remember everything
+                return computerMemory;
+            }
+        }
+
+        function computerTurnMedium() {
+            // Medium: Pick both cards first, then flip (original behavior)
             const allCards = document.querySelectorAll('.card:not(.matched)');
+            const memory = getComputerMemory();
             
             // Check if computer knows any matching pairs
-            const knownPairs = findKnownPair();
+            const knownPairs = findKnownPairWithMemory(memory);
             
             let card1, card2;
             
             if (knownPairs) {
-                // Computer knows a match!
                 [card1, card2] = knownPairs;
             } else {
                 // Pick two cards the computer hasn't seen yet, or random if all seen
-                const unseenCards = Array.from(allCards).filter(c => !computerMemory[c.dataset.index]);
+                const unseenCards = Array.from(allCards).filter(c => !memory[c.dataset.index]);
                 
                 if (unseenCards.length >= 2) {
                     card1 = unseenCards[0];
@@ -711,7 +759,6 @@
                     const otherCards = Array.from(allCards).filter(c => c !== card1);
                     card2 = otherCards[Math.floor(Math.random() * otherCards.length)];
                 } else {
-                    // All cards seen, pick randomly
                     const cardsArray = Array.from(allCards);
                     card1 = cardsArray[Math.floor(Math.random() * cardsArray.length)];
                     const remaining = cardsArray.filter(c => c !== card1);
@@ -719,17 +766,18 @@
                 }
             }
 
-            // Flip first card
+            // Flip both cards with delay
             setTimeout(() => {
                 card1.classList.add('flipped');
                 flippedCards.push(card1);
                 computerMemory[card1.dataset.index] = card1.dataset.symbol;
+                computerMemoryTurns[card1.dataset.index] = turnNumber;
 
-                // Flip second card
                 setTimeout(() => {
                     card2.classList.add('flipped');
                     flippedCards.push(card2);
                     computerMemory[card2.dataset.index] = card2.dataset.symbol;
+                    computerMemoryTurns[card2.dataset.index] = turnNumber;
                     
                     canFlip = false;
                     checkMatch();
@@ -737,15 +785,190 @@
             }, 400);
         }
 
-        function findKnownPair() {
+        function computerTurnHard() {
+            // Hard: Flip first card, check memory, then decide second card intelligently
+            const allCards = document.querySelectorAll('.card:not(.matched)');
+            const memory = getComputerMemory();
+            
+            // Check if we already know a matching pair
+            const knownPairs = findKnownPairWithMemory(memory);
+            
+            if (knownPairs) {
+                // We know a match, play it
+                const [card1, card2] = knownPairs;
+                
+                setTimeout(() => {
+                    card1.classList.add('flipped');
+                    flippedCards.push(card1);
+                    computerMemory[card1.dataset.index] = card1.dataset.symbol;
+                    computerMemoryTurns[card1.dataset.index] = turnNumber;
+
+                    setTimeout(() => {
+                        card2.classList.add('flipped');
+                        flippedCards.push(card2);
+                        computerMemory[card2.dataset.index] = card2.dataset.symbol;
+                        computerMemoryTurns[card2.dataset.index] = turnNumber;
+                        
+                        canFlip = false;
+                        checkMatch();
+                    }, 600);
+                }, 400);
+            } else {
+                // No known match, explore intelligently
+                // Pick first card from unseen cards
+                const unseenCards = Array.from(allCards).filter(c => !memory[c.dataset.index]);
+                
+                let card1;
+                if (unseenCards.length > 0) {
+                    card1 = unseenCards[0];
+                } else {
+                    // All cards seen, pick randomly
+                    const cardsArray = Array.from(allCards);
+                    card1 = cardsArray[Math.floor(Math.random() * cardsArray.length)];
+                }
+
+                // Flip first card
+                setTimeout(() => {
+                    card1.classList.add('flipped');
+                    flippedCards.push(card1);
+                    const symbol1 = card1.dataset.symbol;
+                    computerMemory[card1.dataset.index] = symbol1;
+                    computerMemoryTurns[card1.dataset.index] = turnNumber;
+
+                    // NOW check if we know where the matching card is
+                    let card2 = null;
+                    const updatedMemory = getComputerMemory();
+                    
+                    for (const card of allCards) {
+                        if (card === card1 || card.classList.contains('matched')) continue;
+                        const idx = card.dataset.index;
+                        if (updatedMemory[idx] === symbol1) {
+                            card2 = card;
+                            break;
+                        }
+                    }
+
+                    // If we don't know the match, pick from unseen cards
+                    if (!card2) {
+                        const remainingUnseen = Array.from(allCards).filter(c => 
+                            c !== card1 && !updatedMemory[c.dataset.index]
+                        );
+                        
+                        if (remainingUnseen.length > 0) {
+                            card2 = remainingUnseen[0];
+                        } else {
+                            const remaining = Array.from(allCards).filter(c => c !== card1);
+                            card2 = remaining[Math.floor(Math.random() * remaining.length)];
+                        }
+                    }
+
+                    setTimeout(() => {
+                        card2.classList.add('flipped');
+                        flippedCards.push(card2);
+                        computerMemory[card2.dataset.index] = card2.dataset.symbol;
+                        computerMemoryTurns[card2.dataset.index] = turnNumber;
+                        
+                        canFlip = false;
+                        checkMatch();
+                    }, 600);
+                }, 400);
+            }
+        }
+
+        function computerTurnEasy() {
+            // Easy: Same as Hard but with limited memory (forgets after 4 turns)
+            const allCards = document.querySelectorAll('.card:not(.matched)');
+            const memory = getComputerMemory(); // This filters to recent 4 turns
+            
+            // Check if we know a matching pair from recent memory
+            const knownPairs = findKnownPairWithMemory(memory);
+            
+            if (knownPairs) {
+                const [card1, card2] = knownPairs;
+                
+                setTimeout(() => {
+                    card1.classList.add('flipped');
+                    flippedCards.push(card1);
+                    computerMemory[card1.dataset.index] = card1.dataset.symbol;
+                    computerMemoryTurns[card1.dataset.index] = turnNumber;
+
+                    setTimeout(() => {
+                        card2.classList.add('flipped');
+                        flippedCards.push(card2);
+                        computerMemory[card2.dataset.index] = card2.dataset.symbol;
+                        computerMemoryTurns[card2.dataset.index] = turnNumber;
+                        
+                        canFlip = false;
+                        checkMatch();
+                    }, 600);
+                }, 400);
+            } else {
+                // No known match in recent memory, explore
+                const unseenCards = Array.from(allCards).filter(c => !memory[c.dataset.index]);
+                
+                let card1;
+                if (unseenCards.length > 0) {
+                    card1 = unseenCards[0];
+                } else {
+                    const cardsArray = Array.from(allCards);
+                    card1 = cardsArray[Math.floor(Math.random() * cardsArray.length)];
+                }
+
+                setTimeout(() => {
+                    card1.classList.add('flipped');
+                    flippedCards.push(card1);
+                    const symbol1 = card1.dataset.symbol;
+                    computerMemory[card1.dataset.index] = symbol1;
+                    computerMemoryTurns[card1.dataset.index] = turnNumber;
+
+                    // Check recent memory for matching card
+                    let card2 = null;
+                    const updatedMemory = getComputerMemory();
+                    
+                    for (const card of allCards) {
+                        if (card === card1 || card.classList.contains('matched')) continue;
+                        const idx = card.dataset.index;
+                        if (updatedMemory[idx] === symbol1) {
+                            card2 = card;
+                            break;
+                        }
+                    }
+
+                    if (!card2) {
+                        const remainingUnseen = Array.from(allCards).filter(c => 
+                            c !== card1 && !updatedMemory[c.dataset.index]
+                        );
+                        
+                        if (remainingUnseen.length > 0) {
+                            card2 = remainingUnseen[0];
+                        } else {
+                            const remaining = Array.from(allCards).filter(c => c !== card1);
+                            card2 = remaining[Math.floor(Math.random() * remaining.length)];
+                        }
+                    }
+
+                    setTimeout(() => {
+                        card2.classList.add('flipped');
+                        flippedCards.push(card2);
+                        computerMemory[card2.dataset.index] = card2.dataset.symbol;
+                        computerMemoryTurns[card2.dataset.index] = turnNumber;
+                        
+                        canFlip = false;
+                        checkMatch();
+                    }, 600);
+                }, 400);
+            }
+        }
+
+        function findKnownPairWithMemory(memory) {
             const allCards = document.querySelectorAll('.card:not(.matched)');
             const symbolLocations = {};
 
-            // Build a map of symbols to their card elements
+            // Build a map of symbols to their card elements using provided memory
             for (const card of allCards) {
                 const index = card.dataset.index;
-                if (computerMemory[index] !== undefined) {
-                    const symbol = computerMemory[index];
+                if (memory[index] !== undefined) {
+                    const symbol = memory[index];
                     if (!symbolLocations[symbol]) {
                         symbolLocations[symbol] = [];
                     }
@@ -790,6 +1013,7 @@ Moves: ${moves}`;
             } else {
                 const gridSize = document.getElementById('sizeSelect').value;
                 const theme = document.getElementById('themeSelect').options[document.getElementById('themeSelect').selectedIndex].text;
+                const difficultyText = difficulty.charAt(0).toUpperCase() + difficulty.slice(1);
                 
                 if (playerMatches > computerMatches) {
                     winTitle.textContent = '🎉 You Win!';
@@ -805,7 +1029,7 @@ Moves: ${moves}`;
                     <p>Computer: ${computerMatches}</p>
                 `;
                 
-                finalScoreText = `Memory Game - VS Computer
+                finalScoreText = `Memory Game - VS ${difficultyText} Computer
 Grid: ${gridSize}
 Theme: ${theme}
 Final Score:
