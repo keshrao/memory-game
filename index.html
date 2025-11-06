@@ -765,14 +765,24 @@
             updateTurnIndicator();
 
             if (roomData.matchedCards) {
-                roomData.matchedCards.forEach(index => {
+                const allMatched = new Set(roomData.matchedCards);
+
+                // Show any new matched cards with a brief flip before hiding
+                allMatched.forEach(index => {
                     const card = document.querySelector(`[data-index="${index}"]`);
                     if (card && !card.classList.contains('matched')) {
-                        card.classList.add('matched');
+                        // Flip to show symbol first
+                        card.classList.add('flipped');
+
+                        // After 800ms, hide the cards as matched
+                        setTimeout(() => {
+                            card.classList.add('matched');
+                            card.classList.remove('flipped');
+                        }, 800);
                     }
                 });
             }
-
+            
             if (roomData.lastMove && roomData.lastMove.player !== playerId) {
                 const cardIndices = roomData.lastMove.cards;
                 if (cardIndices && cardIndices.length === 2) {
