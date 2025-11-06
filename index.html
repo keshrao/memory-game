@@ -225,6 +225,7 @@
             cursor: pointer;
             box-shadow: 0 4px 15px rgba(0,0,0,0.2);
             transition: all 0.3s ease;
+            margin: 5px;
         }
 
         .restart-btn:hover {
@@ -236,7 +237,7 @@
             transform: translateY(0);
         }
 
-        .win-message {
+        .modal {
             position: fixed;
             top: 50%;
             left: 50%;
@@ -251,7 +252,7 @@
             max-width: 90%;
         }
 
-        .win-message.show {
+        .modal.show {
             display: block;
             animation: popup 0.5s ease;
         }
@@ -265,16 +266,40 @@
             }
         }
 
-        .win-message h2 {
+        .modal h2 {
             color: #667eea;
             font-size: 2.5em;
             margin-bottom: 20px;
         }
 
-        .win-message p {
+        .modal p {
             color: #666;
             font-size: 1.3em;
             margin-bottom: 10px;
+        }
+
+        .modal input {
+            padding: 12px 20px;
+            font-size: 1.1em;
+            border: 2px solid #667eea;
+            border-radius: 10px;
+            margin: 10px 0;
+            width: 100%;
+            max-width: 300px;
+            text-align: center;
+            text-transform: uppercase;
+        }
+
+        .room-code {
+            background: #f0f0f0;
+            padding: 20px;
+            border-radius: 10px;
+            margin: 20px 0;
+            font-family: monospace;
+            font-size: 2em;
+            color: #667eea;
+            font-weight: bold;
+            letter-spacing: 3px;
         }
 
         .score-text {
@@ -294,6 +319,7 @@
             gap: 10px;
             justify-content: center;
             margin-top: 20px;
+            flex-wrap: wrap;
         }
 
         .copy-btn {
@@ -332,15 +358,15 @@
                 font-size: 2em;
             }
 
-            .win-message {
+            .modal {
                 padding: 30px 40px;
             }
 
-            .win-message h2 {
+            .modal h2 {
                 font-size: 2em;
             }
 
-            .win-message p {
+            .modal p {
                 font-size: 1.1em;
             }
         }
@@ -352,17 +378,18 @@
         
         <div class="mode-selector">
             <label for="modeSelect">Game Mode:</label>
-            <select id="modeSelect" onchange="initGame()">
+            <select id="modeSelect" onchange="handleModeChange()">
                 <option value="solo">Solo</option>
                 <option value="vs-easy">VS Easy Computer</option>
                 <option value="vs-medium">VS Medium Computer</option>
                 <option value="vs-hard">VS Hard Computer</option>
+                <option value="vs-friend">VS Friend Online</option>
             </select>
         </div>
 
         <div class="theme-selector">
             <label for="themeSelect">Theme:</label>
-            <select id="themeSelect" onchange="initGame()">
+            <select id="themeSelect" onchange="handleSettingsChange()">
                 <option value="fruits">🍎 Fruits</option>
                 <option value="dinosaurs">🦕 Dinosaurs</option>
                 <option value="trucks">🚚 Trucks</option>
@@ -373,7 +400,7 @@
 
         <div class="size-selector">
             <label for="sizeSelect">Grid Size:</label>
-            <select id="sizeSelect" onchange="initGame()">
+            <select id="sizeSelect" onchange="handleSettingsChange()">
                 <option value="3x4">3x4</option>
                 <option value="4x4">4x4</option>
                 <option value="4x5">4x5</option>
@@ -393,7 +420,7 @@
             </span>
             <span id="vsStats" style="display: none;">
                 <span>You: <span id="playerScore">0</span></span>
-                <span>Computer: <span id="computerScore">0</span></span>
+                <span>Opponent: <span id="opponentScore">0</span></span>
             </span>
         </div>
 
@@ -402,7 +429,36 @@
         <button class="restart-btn" onclick="initGame()">New Game</button>
     </div>
 
-    <div class="win-message" id="winMessage">
+    <!-- Room Selection Modal -->
+    <div class="modal" id="roomModal">
+        <h2>Play Online</h2>
+        <p>Choose an option to play with a friend:</p>
+        <div class="button-group">
+            <button class="restart-btn" onclick="createRoom()">Create Game</button>
+            <button class="restart-btn" onclick="showJoinInput()">Join Game</button>
+        </div>
+        <div id="joinInput" style="display: none; margin-top: 20px;">
+            <input type="text" id="roomCodeInput" placeholder="Enter Room Code" maxlength="12">
+            <div class="button-group">
+                <button class="restart-btn" onclick="joinRoom()">Join</button>
+                <button class="restart-btn" onclick="hideJoinInput()">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Waiting Modal -->
+    <div class="modal" id="waitingModal">
+        <h2>Waiting for Friend...</h2>
+        <p>Share this code with your friend:</p>
+        <div class="room-code" id="roomCodeDisplay"></div>
+        <div class="button-group">
+            <button class="copy-btn" onclick="copyRoomCode()">Copy Code</button>
+            <button class="restart-btn" onclick="cancelRoom()">Cancel</button>
+        </div>
+    </div>
+
+    <!-- Win Message Modal -->
+    <div class="modal" id="winMessage">
         <h2 id="winTitle">🎉 Congratulations!</h2>
         <div id="winContent"></div>
         <div class="score-text" id="scoreText"></div>
@@ -412,7 +468,32 @@
         </div>
     </div>
 
-    <script>
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-app.js";
+        import { getDatabase, ref, set, onValue, update, remove, get } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-database.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyBp8iDGPfzH84iGw0WGmDSp0QJfwTpTDdU",
+            authDomain: "memory-game-21ee5.firebaseapp.com",
+            databaseURL: "https://memory-game-21ee5-default-rtdb.firebaseio.com",
+            projectId: "memory-game-21ee5",
+            storageBucket: "memory-game-21ee5.appspot.com",
+            messagingSenderId: "616933567051",
+            appId: "1:616933567051:web:b1f215ae7dced7270bbbce"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const database = getDatabase(app);
+
+        // Make Firebase functions available globally
+        window.firebaseDb = database;
+        window.firebaseRef = ref;
+        window.firebaseSet = set;
+        window.firebaseOnValue = onValue;
+        window.firebaseUpdate = update;
+        window.firebaseRemove = remove;
+        window.firebaseGet = get;
+
         const themes = {
             fruits: ['🍎', '🍌', '🍇', '🍊', '🍓', '🍒', '🍑', '🥝', '🍉', '🍍', '🥭', '🍐', '🥥', '🍋', '🫐', '🍈', '🥑', '🍅'],
             dinosaurs: ['🦕', '🦖', '🦴', '🦎', '🐊', '🐢', '🦏', '🦘', '🐉', '🦤', '🐲', '🦒', '🐍', '🦎', '🐸', '🦂', '🕷️', '🦗'],
@@ -437,14 +518,402 @@
         let gameMode = 'solo';
         let currentPlayer = 'human';
         let playerMatches = 0;
-        let computerMatches = 0;
+        let opponentMatches = 0;
         let computerMemory = {};
-        let computerMemoryTurns = {}; // Track when each card was seen (for Easy mode)
+        let computerMemoryTurns = {};
         let turnNumber = 0;
         let difficulty = 'medium';
         let startTime = null;
         let timerInterval = null;
         let finalScoreText = '';
+
+        // Online multiplayer state
+        let onlineMode = false;
+        let currentRoomCode = null;
+        let playerId = null;
+        let playerRole = null; // 'player1' or 'player2'
+        let roomListener = null;
+
+        function generatePlayerId() {
+            return 'player_' + Math.random().toString(36).substr(2, 9);
+        }
+
+        function generateRoomCode() {
+            const adjectives = ['BLUE', 'RED', 'GREEN', 'GOLD', 'PINK', 'COOL', 'FAST', 'BOLD'];
+            const nouns = ['TIGER', 'EAGLE', 'SHARK', 'WOLF', 'BEAR', 'LION', 'HAWK', 'DRAGON'];
+            const adj = adjectives[Math.floor(Math.random() * adjectives.length)];
+            const noun = nouns[Math.floor(Math.random() * nouns.length)];
+            const num = Math.floor(Math.random() * 100);
+            return `${adj}-${noun}-${num}`;
+        }
+
+        window.handleModeChange = function() {
+            const mode = document.getElementById('modeSelect').value;
+            if (mode === 'vs-friend') {
+                document.getElementById('roomModal').classList.add('show');
+            } else {
+                onlineMode = false;
+                if (currentRoomCode && roomListener) {
+                    roomListener();
+                    currentRoomCode = null;
+                }
+                initGame();
+            }
+        };
+
+        window.handleSettingsChange = function() {
+            if (!onlineMode) {
+                initGame();
+            }
+        };
+
+        window.createRoom = async function() {
+            playerId = generatePlayerId();
+            currentRoomCode = generateRoomCode();
+            playerRole = 'player1';
+
+            const gridSize = document.getElementById('sizeSelect').value;
+            const theme = document.getElementById('themeSelect').value;
+            const symbols = themes[theme];
+            const size = gridSizes[gridSize];
+            
+            const cardSymbols = [];
+            for (let i = 0; i < size.pairs; i++) {
+                cardSymbols.push(symbols[i], symbols[i]);
+            }
+            const shuffledCards = shuffle(cardSymbols);
+
+            const roomData = {
+                player1: playerId,
+                player2: null,
+                gridSize: gridSize,
+                theme: theme,
+                cards: shuffledCards,
+                currentPlayer: Math.random() < 0.5 ? 'player1' : 'player2',
+                player1Score: 0,
+                player2Score: 0,
+                matchedCards: [],
+                lastMove: null,
+                gameStarted: false
+            };
+
+            await window.firebaseSet(window.firebaseRef(window.firebaseDb, 'rooms/' + currentRoomCode), roomData);
+            
+            document.getElementById('roomModal').classList.remove('show');
+            document.getElementById('roomCodeDisplay').textContent = currentRoomCode;
+            document.getElementById('waitingModal').classList.add('show');
+
+            listenToRoom();
+        };
+
+        window.showJoinInput = function() {
+            document.getElementById('joinInput').style.display = 'block';
+        };
+
+        window.hideJoinInput = function() {
+            document.getElementById('joinInput').style.display = 'none';
+            document.getElementById('roomCodeInput').value = '';
+        };
+
+        window.joinRoom = async function() {
+            const code = document.getElementById('roomCodeInput').value.toUpperCase().trim();
+            if (!code) return;
+
+            const roomRef = window.firebaseRef(window.firebaseDb, 'rooms/' + code);
+            const snapshot = await window.firebaseGet(roomRef);
+            
+            if (!snapshot.exists()) {
+                alert('Room not found! Check the code and try again.');
+                return;
+            }
+
+            const roomData = snapshot.val();
+            if (roomData.player2) {
+                alert('This room is already full!');
+                return;
+            }
+
+            playerId = generatePlayerId();
+            currentRoomCode = code;
+            playerRole = 'player2';
+
+            await window.firebaseUpdate(roomRef, {
+                player2: playerId,
+                gameStarted: true
+            });
+
+            document.getElementById('roomModal').classList.remove('show');
+            document.getElementById('joinInput').style.display = 'none';
+            document.getElementById('roomCodeInput').value = '';
+
+            listenToRoom();
+            initOnlineGame(roomData);
+        };
+
+        window.cancelRoom = function() {
+            if (currentRoomCode) {
+                window.firebaseRemove(window.firebaseRef(window.firebaseDb, 'rooms/' + currentRoomCode));
+            }
+            currentRoomCode = null;
+            document.getElementById('waitingModal').classList.remove('show');
+            document.getElementById('modeSelect').value = 'solo';
+            initGame();
+        };
+
+        window.copyRoomCode = function() {
+            navigator.clipboard.writeText(currentRoomCode);
+            const btn = event.target;
+            const originalText = btn.textContent;
+            btn.textContent = '✓ Copied!';
+            btn.classList.add('copied');
+            setTimeout(() => {
+                btn.textContent = originalText;
+                btn.classList.remove('copied');
+            }, 2000);
+        };
+
+        function listenToRoom() {
+            const roomRef = window.firebaseRef(window.firebaseDb, 'rooms/' + currentRoomCode);
+            roomListener = window.firebaseOnValue(roomRef, (snapshot) => {
+                if (!snapshot.exists()) {
+                    alert('The game room has been closed.');
+                    currentRoomCode = null;
+                    document.getElementById('waitingModal').classList.remove('show');
+                    document.getElementById('modeSelect').value = 'solo';
+                    initGame();
+                    return;
+                }
+
+                const roomData = snapshot.val();
+                
+                if (playerRole === 'player1' && roomData.player2 && roomData.gameStarted) {
+                    document.getElementById('waitingModal').classList.remove('show');
+                    initOnlineGame(roomData);
+                }
+
+                if (roomData.gameStarted && onlineMode) {
+                    updateGameFromRoom(roomData);
+                }
+            });
+        }
+
+        function initOnlineGame(roomData) {
+            onlineMode = true;
+            gameMode = 'vs-friend';
+
+            document.getElementById('sizeSelect').value = roomData.gridSize;
+            document.getElementById('themeSelect').value = roomData.theme;
+
+            const size = gridSizes[roomData.gridSize];
+            totalPairs = size.pairs;
+            cards = roomData.cards;
+
+            currentPlayer = roomData.currentPlayer;
+            playerMatches = roomData.player1Score || 0;
+            opponentMatches = roomData.player2Score || 0;
+
+            const gameBoard = document.getElementById('gameBoard');
+            gameBoard.innerHTML = '';
+            flippedCards = [];
+            canFlip = true;
+
+            gameBoard.style.gridTemplateColumns = `repeat(${size.cols}, 1fr)`;
+            gameBoard.style.gridTemplateRows = `repeat(${size.rows}, 1fr)`;
+
+            const soloStats = document.getElementById('soloStats');
+            const vsStats = document.getElementById('vsStats');
+            soloStats.style.display = 'none';
+            vsStats.style.display = '';
+            document.getElementById('playerScore').textContent = playerRole === 'player1' ? roomData.player1Score : roomData.player2Score;
+            document.getElementById('opponentScore').textContent = playerRole === 'player1' ? roomData.player2Score : roomData.player1Score;
+
+            updateTurnIndicator();
+
+            cards.forEach((symbol, index) => {
+                const card = document.createElement('div');
+                card.className = 'card';
+                card.dataset.symbol = symbol;
+                card.dataset.index = index;
+                
+                if (roomData.matchedCards && roomData.matchedCards.includes(index)) {
+                    card.classList.add('matched');
+                }
+                
+                card.innerHTML = `
+                    <div class="card-face card-back">?</div>
+                    <div class="card-face card-front">${symbol}</div>
+                `;
+                
+                card.addEventListener('click', () => flipCardOnline(card));
+                gameBoard.appendChild(card);
+            });
+        }
+
+        function updateGameFromRoom(roomData) {
+            if (!onlineMode) return;
+
+            currentPlayer = roomData.currentPlayer;
+            const myScore = playerRole === 'player1' ? roomData.player1Score : roomData.player2Score;
+            const theirScore = playerRole === 'player1' ? roomData.player2Score : roomData.player1Score;
+            
+            document.getElementById('playerScore').textContent = myScore;
+            document.getElementById('opponentScore').textContent = theirScore;
+
+            playerMatches = myScore;
+            opponentMatches = theirScore;
+
+            updateTurnIndicator();
+
+            if (roomData.matchedCards) {
+                roomData.matchedCards.forEach(index => {
+                    const card = document.querySelector(`[data-index="${index}"]`);
+                    if (card && !card.classList.contains('matched')) {
+                        card.classList.add('matched');
+                    }
+                });
+            }
+
+            if (roomData.lastMove && roomData.lastMove.player !== playerId) {
+                const cardIndices = roomData.lastMove.cards;
+                if (cardIndices && cardIndices.length === 2) {
+                    setTimeout(() => {
+                        const card1 = document.querySelector(`[data-index="${cardIndices[0]}"]`);
+                        const card2 = document.querySelector(`[data-index="${cardIndices[1]}"]`);
+                        if (card1 && card2) {
+                            card1.classList.add('flipped');
+                            setTimeout(() => {
+                                card2.classList.add('flipped');
+                                
+                                setTimeout(() => {
+                                    if (!card1.classList.contains('matched')) {
+                                        card1.classList.remove('flipped');
+                                        card2.classList.remove('flipped');
+                                    }
+                                }, 1000);
+                            }, 500);
+                        }
+                    }, 300);
+                }
+            }
+
+            const totalMatches = roomData.player1Score + roomData.player2Score;
+            if (totalMatches === totalPairs) {
+                setTimeout(() => showOnlineWinMessage(roomData), 500);
+            }
+        }
+
+        async function flipCardOnline(card) {
+            if (!canFlip || card.classList.contains('flipped') || card.classList.contains('matched')) {
+                return;
+            }
+
+            const isMyTurn = (playerRole === 'player1' && currentPlayer === 'player1') || 
+                            (playerRole === 'player2' && currentPlayer === 'player2');
+            
+            if (!isMyTurn) {
+                return;
+            }
+
+            card.classList.add('flipped');
+            flippedCards.push(card);
+
+            if (flippedCards.length === 2) {
+                canFlip = false;
+                const card1 = flippedCards[0];
+                const card2 = flippedCards[1];
+                const symbol1 = card1.dataset.symbol;
+                const symbol2 = card2.dataset.symbol;
+                const index1 = parseInt(card1.dataset.index);
+                const index2 = parseInt(card2.dataset.index);
+
+                const roomRef = window.firebaseRef(window.firebaseDb, 'rooms/' + currentRoomCode);
+                const snapshot = await window.firebaseGet(roomRef);
+                const roomData = snapshot.val();
+
+                if (symbol1 === symbol2) {
+                    setTimeout(async () => {
+                        const matchedCards = roomData.matchedCards || [];
+                        matchedCards.push(index1, index2);
+
+                        const scoreKey = playerRole === 'player1' ? 'player1Score' : 'player2Score';
+                        const newScore = (roomData[scoreKey] || 0) + 1;
+
+                        await window.firebaseUpdate(roomRef, {
+                            [scoreKey]: newScore,
+                            matchedCards: matchedCards,
+                            lastMove: {
+                                player: playerId,
+                                cards: [index1, index2],
+                                matched: true
+                            }
+                        });
+
+                        card1.classList.add('matched');
+                        card2.classList.add('matched');
+                        flippedCards = [];
+                        canFlip = true;
+                    }, 500);
+                } else {
+                    setTimeout(async () => {
+                        await window.firebaseUpdate(roomRef, {
+                            currentPlayer: playerRole === 'player1' ? 'player2' : 'player1',
+                            lastMove: {
+                                player: playerId,
+                                cards: [index1, index2],
+                                matched: false
+                            }
+                        });
+
+                        card1.classList.remove('flipped');
+                        card2.classList.remove('flipped');
+                        flippedCards = [];
+                        canFlip = true;
+                    }, 1000);
+                }
+            }
+        }
+
+        function showOnlineWinMessage(roomData) {
+            const myScore = playerRole === 'player1' ? roomData.player1Score : roomData.player2Score;
+            const theirScore = playerRole === 'player1' ? roomData.player2Score : roomData.player1Score;
+            
+            const winTitle = document.getElementById('winTitle');
+            const winContent = document.getElementById('winContent');
+            const scoreTextEl = document.getElementById('scoreText');
+            
+            const gridSize = document.getElementById('sizeSelect').value;
+            const theme = document.getElementById('themeSelect').options[document.getElementById('themeSelect').selectedIndex].text;
+            
+            if (myScore > theirScore) {
+                winTitle.textContent = '🎉 You Win!';
+            } else if (theirScore > myScore) {
+                winTitle.textContent = '😢 You Lose!';
+            } else {
+                winTitle.textContent = '🤝 Tie Game!';
+            }
+            
+            winContent.innerHTML = `
+                <p>Final Score:</p>
+                <p>You: ${myScore}</p>
+                <p>Opponent: ${theirScore}</p>
+            `;
+            
+            finalScoreText = `Memory Game - VS Friend Online
+Grid: ${gridSize}
+Theme: ${theme}
+Final Score:
+  You: ${myScore}
+  Opponent: ${theirScore}
+Result: ${myScore > theirScore ? 'You Win!' : theirScore > myScore ? 'You Lose!' : 'Tie!'}`;
+            
+            scoreTextEl.textContent = finalScoreText;
+            document.getElementById('winMessage').classList.add('show');
+
+            if (currentRoomCode) {
+                window.firebaseRemove(window.firebaseRef(window.firebaseDb, 'rooms/' + currentRoomCode));
+                currentRoomCode = null;
+            }
+        }
 
         function getCurrentTheme() {
             const select = document.getElementById('themeSelect');
@@ -517,7 +986,12 @@
             const indicator = document.getElementById('turnIndicator');
             const turnText = document.getElementById('turnText');
             
-            if (gameMode === 'vs') {
+            if (gameMode === 'vs-friend') {
+                indicator.style.display = 'inline-block';
+                const isMyTurn = (playerRole === 'player1' && currentPlayer === 'player1') || 
+                                (playerRole === 'player2' && currentPlayer === 'player2');
+                turnText.textContent = isMyTurn ? 'Your Turn' : 'Opponent Turn';
+            } else if (gameMode !== 'solo') {
                 indicator.style.display = 'inline-block';
                 turnText.textContent = currentPlayer === 'human' ? 'Your Turn' : 'Computer Turn';
             } else {
@@ -525,13 +999,21 @@
             }
         }
 
-        function initGame() {
+        window.initGame = function() {
+            if (onlineMode) {
+                if (currentRoomCode) {
+                    window.firebaseRemove(window.firebaseRef(window.firebaseDb, 'rooms/' + currentRoomCode));
+                    currentRoomCode = null;
+                }
+                onlineMode = false;
+            }
+
             const gameBoard = document.getElementById('gameBoard');
             gameBoard.innerHTML = '';
             flippedCards = [];
             moves = 0;
             playerMatches = 0;
-            computerMatches = 0;
+            opponentMatches = 0;
             computerMemory = {};
             computerMemoryTurns = {};
             turnNumber = 0;
@@ -541,10 +1023,11 @@
             
             const modeSelect = document.getElementById('modeSelect').value;
             
-            // Parse mode and difficulty
             if (modeSelect === 'solo') {
                 gameMode = 'solo';
                 difficulty = null;
+            } else if (modeSelect === 'vs-friend') {
+                return;
             } else {
                 gameMode = 'vs';
                 if (modeSelect === 'vs-easy') difficulty = 'easy';
@@ -556,18 +1039,15 @@
             const symbols = getCurrentTheme();
             totalPairs = gridSize.pairs;
 
-            // Randomly decide who starts in VS mode
             if (gameMode === 'vs') {
                 currentPlayer = Math.random() < 0.5 ? 'human' : 'computer';
             } else {
                 currentPlayer = 'human';
             }
 
-            // Set up the grid
             gameBoard.style.gridTemplateColumns = `repeat(${gridSize.cols}, 1fr)`;
             gameBoard.style.gridTemplateRows = `repeat(${gridSize.rows}, 1fr)`;
             
-            // Update UI based on mode
             const soloStats = document.getElementById('soloStats');
             const vsStats = document.getElementById('vsStats');
             
@@ -581,13 +1061,12 @@
                 soloStats.style.display = 'none';
                 vsStats.style.display = '';
                 document.getElementById('playerScore').textContent = '0';
-                document.getElementById('computerScore').textContent = '0';
+                document.getElementById('opponentScore').textContent = '0';
             }
             
             updateTurnIndicator();
             document.getElementById('winMessage').classList.remove('show');
 
-            // Create pairs
             const cardSymbols = [];
             for (let i = 0; i < gridSize.pairs; i++) {
                 cardSymbols.push(symbols[i], symbols[i]);
@@ -610,18 +1089,16 @@
                 gameBoard.appendChild(card);
             });
 
-            // If computer starts, trigger computer turn
             if (gameMode === 'vs' && currentPlayer === 'computer') {
                 setTimeout(computerTurn, 1000);
             }
-        }
+        };
 
         function flipCard(card) {
             if (!canFlip || card.classList.contains('flipped') || card.classList.contains('matched')) {
                 return;
             }
 
-            // In VS mode, only allow flipping if it's human's turn
             if (gameMode === 'vs' && currentPlayer !== 'human') {
                 return;
             }
@@ -629,7 +1106,6 @@
             card.classList.add('flipped');
             flippedCards.push(card);
 
-            // Store in computer memory in VS mode
             if (gameMode === 'vs') {
                 const index = card.dataset.index;
                 const symbol = card.dataset.symbol;
@@ -649,7 +1125,6 @@
             const symbol2 = card2.dataset.symbol;
 
             if (symbol1 === symbol2) {
-                // Match found
                 setTimeout(() => {
                     card1.classList.add('matched');
                     card2.classList.add('matched');
@@ -661,26 +1136,24 @@
                             playerMatches++;
                             document.getElementById('playerScore').textContent = playerMatches;
                         } else {
-                            computerMatches++;
-                            document.getElementById('computerScore').textContent = computerMatches;
+                            opponentMatches++;
+                            document.getElementById('opponentScore').textContent = opponentMatches;
                         }
                     }
                     
                     flippedCards = [];
                     canFlip = true;
 
-                    const totalMatches = gameMode === 'solo' ? moves : (playerMatches + computerMatches);
+                    const totalMatches = gameMode === 'solo' ? moves : (playerMatches + opponentMatches);
                     if (totalMatches === totalPairs) {
                         setTimeout(() => showWinMessage(), 500);
                     } else if (gameMode === 'vs') {
-                        // Same player goes again after a match
                         if (currentPlayer === 'computer') {
                             setTimeout(computerTurn, 1000);
                         }
                     }
                 }, 500);
             } else {
-                // No match - increment turn number
                 turnNumber++;
                 
                 if (gameMode === 'solo') {
@@ -694,7 +1167,6 @@
                     flippedCards = [];
                     canFlip = true;
 
-                    // Switch players in VS mode
                     if (gameMode === 'vs') {
                         currentPlayer = currentPlayer === 'human' ? 'computer' : 'human';
                         updateTurnIndicator();
@@ -721,7 +1193,6 @@
 
         function getComputerMemory() {
             if (difficulty === 'easy') {
-                // Easy mode: forget cards seen more than 4 turns ago
                 const recentMemory = {};
                 for (const [index, symbol] of Object.entries(computerMemory)) {
                     if (turnNumber - computerMemoryTurns[index] <= 4) {
@@ -730,17 +1201,14 @@
                 }
                 return recentMemory;
             } else {
-                // Medium and Hard: remember everything
                 return computerMemory;
             }
         }
 
         function computerTurnMedium() {
-            // Medium: Pick both cards first, then flip (original behavior)
             const allCards = document.querySelectorAll('.card:not(.matched)');
             const memory = getComputerMemory();
             
-            // Check if computer knows any matching pairs
             const knownPairs = findKnownPairWithMemory(memory);
             
             let card1, card2;
@@ -748,7 +1216,6 @@
             if (knownPairs) {
                 [card1, card2] = knownPairs;
             } else {
-                // Pick two cards the computer hasn't seen yet, or random if all seen
                 const unseenCards = Array.from(allCards).filter(c => !memory[c.dataset.index]);
                 
                 if (unseenCards.length >= 2) {
@@ -766,7 +1233,6 @@
                 }
             }
 
-            // Flip both cards with delay
             setTimeout(() => {
                 card1.classList.add('flipped');
                 flippedCards.push(card1);
@@ -786,15 +1252,12 @@
         }
 
         function computerTurnHard() {
-            // Hard: Flip first card, check memory, then decide second card intelligently
             const allCards = document.querySelectorAll('.card:not(.matched)');
             const memory = getComputerMemory();
             
-            // Check if we already know a matching pair
             const knownPairs = findKnownPairWithMemory(memory);
             
             if (knownPairs) {
-                // We know a match, play it
                 const [card1, card2] = knownPairs;
                 
                 setTimeout(() => {
@@ -814,20 +1277,16 @@
                     }, 600);
                 }, 400);
             } else {
-                // No known match, explore intelligently
-                // Pick first card from unseen cards
                 const unseenCards = Array.from(allCards).filter(c => !memory[c.dataset.index]);
                 
                 let card1;
                 if (unseenCards.length > 0) {
                     card1 = unseenCards[0];
                 } else {
-                    // All cards seen, pick randomly
                     const cardsArray = Array.from(allCards);
                     card1 = cardsArray[Math.floor(Math.random() * cardsArray.length)];
                 }
 
-                // Flip first card
                 setTimeout(() => {
                     card1.classList.add('flipped');
                     flippedCards.push(card1);
@@ -835,7 +1294,6 @@
                     computerMemory[card1.dataset.index] = symbol1;
                     computerMemoryTurns[card1.dataset.index] = turnNumber;
 
-                    // NOW check if we know where the matching card is
                     let card2 = null;
                     const updatedMemory = getComputerMemory();
                     
@@ -848,7 +1306,6 @@
                         }
                     }
 
-                    // If we don't know the match, pick from unseen cards
                     if (!card2) {
                         const remainingUnseen = Array.from(allCards).filter(c => 
                             c !== card1 && !updatedMemory[c.dataset.index]
@@ -876,11 +1333,9 @@
         }
 
         function computerTurnEasy() {
-            // Easy: Same as Hard but with limited memory (forgets after 4 turns)
             const allCards = document.querySelectorAll('.card:not(.matched)');
-            const memory = getComputerMemory(); // This filters to recent 4 turns
+            const memory = getComputerMemory();
             
-            // Check if we know a matching pair from recent memory
             const knownPairs = findKnownPairWithMemory(memory);
             
             if (knownPairs) {
@@ -903,7 +1358,6 @@
                     }, 600);
                 }, 400);
             } else {
-                // No known match in recent memory, explore
                 const unseenCards = Array.from(allCards).filter(c => !memory[c.dataset.index]);
                 
                 let card1;
@@ -921,7 +1375,6 @@
                     computerMemory[card1.dataset.index] = symbol1;
                     computerMemoryTurns[card1.dataset.index] = turnNumber;
 
-                    // Check recent memory for matching card
                     let card2 = null;
                     const updatedMemory = getComputerMemory();
                     
@@ -964,7 +1417,6 @@
             const allCards = document.querySelectorAll('.card:not(.matched)');
             const symbolLocations = {};
 
-            // Build a map of symbols to their card elements using provided memory
             for (const card of allCards) {
                 const index = card.dataset.index;
                 if (memory[index] !== undefined) {
@@ -976,7 +1428,6 @@
                 }
             }
 
-            // Find a symbol that appears twice
             for (const symbol in symbolLocations) {
                 if (symbolLocations[symbol].length >= 2) {
                     return [symbolLocations[symbol][0], symbolLocations[symbol][1]];
@@ -1015,9 +1466,9 @@ Moves: ${moves}`;
                 const theme = document.getElementById('themeSelect').options[document.getElementById('themeSelect').selectedIndex].text;
                 const difficultyText = difficulty.charAt(0).toUpperCase() + difficulty.slice(1);
                 
-                if (playerMatches > computerMatches) {
+                if (playerMatches > opponentMatches) {
                     winTitle.textContent = '🎉 You Win!';
-                } else if (computerMatches > playerMatches) {
+                } else if (opponentMatches > playerMatches) {
                     winTitle.textContent = '🤖 Computer Wins!';
                 } else {
                     winTitle.textContent = '🤝 Tie Game!';
@@ -1026,7 +1477,7 @@ Moves: ${moves}`;
                 winContent.innerHTML = `
                     <p>Final Score:</p>
                     <p>You: ${playerMatches}</p>
-                    <p>Computer: ${computerMatches}</p>
+                    <p>Computer: ${opponentMatches}</p>
                 `;
                 
                 finalScoreText = `Memory Game - VS ${difficultyText} Computer
@@ -1034,15 +1485,15 @@ Grid: ${gridSize}
 Theme: ${theme}
 Final Score:
   You: ${playerMatches}
-  Computer: ${computerMatches}
-Result: ${playerMatches > computerMatches ? 'You Win!' : computerMatches > playerMatches ? 'Computer Wins!' : 'Tie!'}`;
+  Computer: ${opponentMatches}
+Result: ${playerMatches > opponentMatches ? 'You Win!' : opponentMatches > playerMatches ? 'Computer Wins!' : 'Tie!'}`;
             }
             
             scoreTextEl.textContent = finalScoreText;
             document.getElementById('winMessage').classList.add('show');
         }
 
-        function copyScore() {
+        window.copyScore = function() {
             navigator.clipboard.writeText(finalScoreText).then(() => {
                 const btn = document.getElementById('copyBtn');
                 const originalText = btn.textContent;
@@ -1056,7 +1507,7 @@ Result: ${playerMatches > computerMatches ? 'You Win!' : computerMatches > playe
             }).catch(err => {
                 alert('Failed to copy to clipboard');
             });
-        }
+        };
 
         setRandomTheme();
         setRandomGridSize();
