@@ -588,7 +588,7 @@
                 gridSize: gridSize,
                 theme: theme,
                 cards: shuffledCards,
-                currentPlayer: Math.random() < 0.5 ? 'player1' : 'player2',
+                currentPlayer: 'player1',
                 player1Score: 0,
                 player2Score: 0,
                 matchedCards: [],
@@ -638,7 +638,8 @@
 
             await window.firebaseUpdate(roomRef, {
                 player2: playerId,
-                gameStarted: true
+                gameStarted: true,
+                currentPlayer: Math.random() < 0.5 ? 'player1' : 'player2'
             });
 
             document.getElementById('roomModal').classList.remove('show');
@@ -685,7 +686,7 @@
 
                 const roomData = snapshot.val();
                 
-                if (playerRole === 'player1' && roomData.player2) {
+                if (playerRole === 'player1' && roomData.player2 && roomData.gameStarted) {
                     document.getElementById('waitingModal').classList.remove('show');
                     initOnlineGame(roomData);
                 }
