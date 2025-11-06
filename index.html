@@ -685,7 +685,7 @@
 
                 const roomData = snapshot.val();
                 
-                if (playerRole === 'player1' && roomData.player2 && roomData.gameStarted) {
+                if (playerRole === 'player1' && roomData.player2) {
                     document.getElementById('waitingModal').classList.remove('show');
                     initOnlineGame(roomData);
                 }
