@@ -543,8 +543,7 @@
             const nouns = ['TIGER', 'EAGLE', 'SHARK', 'WOLF', 'BEAR', 'LION', 'HAWK', 'DRAGON'];
             const adj = adjectives[Math.floor(Math.random() * adjectives.length)];
             const noun = nouns[Math.floor(Math.random() * nouns.length)];
-            const num = Math.floor(Math.random() * 100);
-            return `${adj}-${noun}-${num}`;
+            return `${adj}-${noun}`;
         }
 
         window.handleModeChange = function() {
