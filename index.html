@@ -783,36 +783,41 @@
                     
                     // If the elements exist, reveal them (even if they might later be marked matched)
                     if (card1 && card2) {
-                        // ensure they're flipped to show reveal to this client
+                        // Always show both flipping up to reveal
                         card1.classList.add('flipped');
+                        card2.classList.add('flipped');
+                    
                         setTimeout(() => {
-                            card2.classList.add('flipped');
-        
-                            setTimeout(() => {
-                                if (lastMove.matched) {
-                                    // show matched animation then mark matched (don't require them to be not .matched)
+                            if (lastMove.matched) {
+                                // Pause briefly to show the reveal, then mark as matched
+                                setTimeout(() => {
                                     card1.classList.add('matched');
                                     card2.classList.add('matched');
-                                } else {
-                                    // Not a match — flip them back for the observer
+                                }, 700);
+                            } else {
+                                // Not a match – flip them back down
+                                setTimeout(() => {
                                     card1.classList.remove('flipped');
                                     card2.classList.remove('flipped');
-                                }
-                            }, 1000); // show revealed cards for 1 second
+                                }, 1000);
+                            }
                         }, 500);
                     }
                 }
             }
         
             // --- 2) Now sync matchedCards array to DOM (idempotent) ---
-            if (roomData.matchedCards && Array.isArray(roomData.matchedCards)) {
-                roomData.matchedCards.forEach(index => {
-                    const card = document.querySelector(`[data-index="${index}"]`);
-                    if (card && !card.classList.contains('matched')) {
-                        card.classList.add('matched');
-                    }
-                });
-            }
+            setTimeout(() => {
+                if (roomData.matchedCards && Array.isArray(roomData.matchedCards)) {
+                    roomData.matchedCards.forEach(index => {
+                        const card = document.querySelector(`[data-index="${index}"]`);
+                        if (card && !card.classList.contains('matched')) {
+                            card.classList.add('matched');
+                        }
+                    });
+                }
+            }, 1500); // delay to let animation run first
+
         
             // --- 3) Check game end ---
             const totalMatches = (roomData.player1Score || 0) + (roomData.player2Score || 0);
