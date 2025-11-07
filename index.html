@@ -765,63 +765,34 @@
             opponentMatches = theirScore;
 
             updateTurnIndicator();
-
-            if (roomData.matchedCards) {
-                const currentMatched = new Set(roomData.matchedCards);
-                const previousMatched = new Set(previouslyMatchedCards);
-                
-                // Find newly matched cards
-                const newlyMatched = [...currentMatched].filter(x => !previousMatched.has(x));
-                
-                // Check if these are part of the current opponent move
-                const isCurrentMove = roomData.lastMove && 
-                                     roomData.lastMove.player !== playerId && 
-                                     roomData.lastMove.matched;
-                
-                // Only animate newly matched cards if they're NOT the opponent's current move
-                // (because lastMove animation will handle those)
-                if (!isCurrentMove && newlyMatched.length > 0) {
-                    newlyMatched.forEach(index => {
-                        const card = document.querySelector(`[data-index="${index}"]`);
-                        if (card && !card.classList.contains('matched')) {
-                            card.classList.add('flipped');
-                            setTimeout(() => {
-                                card.classList.add('matched');
-                                card.classList.remove('flipped');
-                            }, 800);
-                        }
-                    });
-                }
-                
-                // Update tracking
-                previouslyMatchedCards = roomData.matchedCards;
-            }
             
-            if (roomData.lastMove && roomData.lastMove.player !== playerId) {
+           if (roomData.lastMove && roomData.lastMove.player !== playerId) {
                 const cardIndices = roomData.lastMove.cards;
                 if (cardIndices && cardIndices.length === 2) {
-                    setTimeout(() => {
-                        const card1 = document.querySelector(`[data-index="${cardIndices[0]}"]`);
-                        const card2 = document.querySelector(`[data-index="${cardIndices[1]}"]`);
-                        if (card1 && card2) {
-                            card1.classList.add('flipped');
+                    const card1 = document.querySelector(`[data-index="${cardIndices[0]}"]`);
+                    const card2 = document.querySelector(`[data-index="${cardIndices[1]}"]`);
+                    
+                    if (card1 && card2 && !card1.classList.contains('matched')) {
+                        // Flip first card
+                        card1.classList.add('flipped');
+                        
+                        setTimeout(() => {
+                            // Flip second card
+                            card2.classList.add('flipped');
+                            
                             setTimeout(() => {
-                                card2.classList.add('flipped');
-                                
-                                setTimeout(() => {
-                                    if (roomData.lastMove.matched) {
-                                        // If it was a match, add the matched class to make them disappear
-                                        card1.classList.add('matched');
-                                        card2.classList.add('matched');
-                                    } else {
-                                        // If not a match, flip them back
-                                        card1.classList.remove('flipped');
-                                        card2.classList.remove('flipped');
-                                    }
-                                }, 1000);
-                            }, 500);
-                        }
-                    }, 300);
+                                if (roomData.lastMove.matched) {
+                                    // It was a match - make them disappear
+                                    card1.classList.add('matched');
+                                    card2.classList.add('matched');
+                                } else {
+                                    // Not a match - flip them back
+                                    card1.classList.remove('flipped');
+                                    card2.classList.remove('flipped');
+                                }
+                            }, 1000); // Show the revealed cards for 1 second
+                        }, 500);
+                    }
                 }
             }
 
