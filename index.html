@@ -765,8 +765,18 @@
             opponentMatches = theirScore;
 
             updateTurnIndicator();
+           
+            // --- ensure all matched cards are synced visually ---
+            if (roomData.matchedCards && Array.isArray(roomData.matchedCards)) {
+                roomData.matchedCards.forEach(index => {
+                    const card = document.querySelector(`[data-index="${index}"]`);
+                    if (card && !card.classList.contains('matched')) {
+                        card.classList.add('matched');
+                    }
+                });
+            }
             
-           if (roomData.lastMove && roomData.lastMove.player !== playerId) {
+            if (roomData.lastMove && roomData.lastMove.player !== playerId) {
                 const cardIndices = roomData.lastMove.cards;
                 if (cardIndices && cardIndices.length === 2) {
                     const card1 = document.querySelector(`[data-index="${cardIndices[0]}"]`);
@@ -845,8 +855,10 @@
                                 player: playerId,
                                 cards: [index1, index2],
                                 matched: true
-                            }
+                            },
+                            currentPlayer: playerRole // stays same turn on match
                         });
+
 
                         card1.classList.add('matched');
                         card2.classList.add('matched');
