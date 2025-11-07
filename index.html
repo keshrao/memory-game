@@ -533,7 +533,8 @@
         let playerId = null;
         let playerRole = null; // 'player1' or 'player2'
         let roomListener = null;
-
+        let previouslyMatchedCards = [];
+        
         function generatePlayerId() {
             return 'player_' + Math.random().toString(36).substr(2, 9);
         }
@@ -700,6 +701,7 @@
         function initOnlineGame(roomData) {
             onlineMode = true;
             gameMode = 'vs-friend';
+            previouslyMatchedCards = [];
 
             document.getElementById('sizeSelect').value = roomData.gridSize;
             document.getElementById('themeSelect').value = roomData.theme;
@@ -765,19 +767,26 @@
             updateTurnIndicator();
 
             if (roomData.matchedCards) {
-                const allMatched = new Set(roomData.matchedCards);
-
-                allMatched.forEach(index => {
+                const currentMatched = new Set(roomData.matchedCards);
+                const previousMatched = new Set(previouslyMatchedCards);
+                
+                // Find newly matched cards
+                const newlyMatched = [...currentMatched].filter(x => !previousMatched.has(x));
+                
+                // Animate only newly matched cards
+                newlyMatched.forEach(index => {
                     const card = document.querySelector(`[data-index="${index}"]`);
                     if (card && !card.classList.contains('matched')) {
-                         // briefly flip them to show what your friend found
                         card.classList.add('flipped');
                         setTimeout(() => {
                             card.classList.add('matched');
                             card.classList.remove('flipped');
-                        }, 800); // 0.8 seconds delay before they disappear
+                        }, 800);
                     }
                 });
+                
+                // Update tracking
+                previouslyMatchedCards = roomData.matchedCards;
             }
             
             if (roomData.lastMove && roomData.lastMove.player !== playerId) {
