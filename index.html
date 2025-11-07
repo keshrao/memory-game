@@ -756,8 +756,8 @@
             if (!onlineMode) return;
         
             currentPlayer = roomData.currentPlayer;
-            const myScore = playerRole === 'player1' ? roomData.player1Score : roomData.player2Score;
-            const theirScore = playerRole === 'player1' ? roomData.player2Score : roomData.player1Score;
+            const myScore = playerRole === 'player1' ? (roomData.player1Score || 0) : (roomData.player2Score || 0);
+            const theirScore = playerRole === 'player1' ? (roomData.player2Score || 0) : (roomData.player1Score || 0);
             
             document.getElementById('playerScore').textContent = myScore;
             document.getElementById('opponentScore').textContent = theirScore;
@@ -767,46 +767,48 @@
         
             updateTurnIndicator();
         
-            // --- 1) Process lastMove reveal first (so the flip animation is shown) ---
-            // Guard against processing the same lastMove multiple times.
+            // Process lastMove first (if it's from the other player) and only once
             const lastMove = roomData.lastMove || null;
-            const lastMoveKey = lastMove ? JSON.stringify(lastMove) : null;
+            const lastMoveKey = lastMove ? `${lastMove.player}|${lastMove.cards?.join(',')}|${lastMove.time || ''}|${lastMove.matched}` : null;
         
             if (lastMove && lastMove.player !== playerId && lastMoveKey !== lastProcessedMove) {
-                // mark as processed immediately to avoid replay while animating
                 lastProcessedMove = lastMoveKey;
         
                 const cardIndices = lastMove.cards;
                 if (cardIndices && cardIndices.length === 2) {
                     const card1 = document.querySelector(`[data-index="${cardIndices[0]}"]`);
                     const card2 = document.querySelector(`[data-index="${cardIndices[1]}"]`);
-                    
-                    // If the elements exist, reveal them (even if they might later be marked matched)
+        
                     if (card1 && card2) {
-                        // Always show both flipping up to reveal
+                        // If they are already marked matched, temporarily un-mark them so the flip is visible
+                        const wasMatched1 = card1.classList.contains('matched');
+                        const wasMatched2 = card2.classList.contains('matched');
+                        if (wasMatched1) card1.classList.remove('matched');
+                        if (wasMatched2) card2.classList.remove('matched');
+        
+                        // Ensure they flip up for the observer
                         card1.classList.add('flipped');
                         card2.classList.add('flipped');
-                    
-                        setTimeout(() => {
-                            if (lastMove.matched) {
-                                // Pause briefly to show the reveal, then mark as matched
-                                setTimeout(() => {
-                                    card1.classList.add('matched');
-                                    card2.classList.add('matched');
-                                }, 700);
-                            } else {
-                                // Not a match – flip them back down
-                                setTimeout(() => {
-                                    card1.classList.remove('flipped');
-                                    card2.classList.remove('flipped');
-                                }, 1000);
-                            }
-                        }, 500);
+        
+                        if (lastMove.matched) {
+                            // show reveal briefly then mark matched visually
+                            setTimeout(() => {
+                                card1.classList.add('matched');
+                                card2.classList.add('matched');
+                            }, 700);
+                        } else {
+                            // not a match: flip back after showing
+                            setTimeout(() => {
+                                card1.classList.remove('flipped');
+                                card2.classList.remove('flipped');
+                            }, 1000);
+                        }
                     }
                 }
             }
         
-            // --- 2) Now sync matchedCards array to DOM (idempotent) ---
+            // After the reveal has had time to run, make sure server's matchedCards array is applied
+            // Delay slightly so reveal animation completes (if any)
             setTimeout(() => {
                 if (roomData.matchedCards && Array.isArray(roomData.matchedCards)) {
                     roomData.matchedCards.forEach(index => {
@@ -814,16 +816,19 @@
                         if (card && !card.classList.contains('matched')) {
                             card.classList.add('matched');
                         }
+                        // also remove flipped if somehow left visible
+                        if (card && card.classList.contains('flipped') && card.classList.contains('matched')) {
+                            card.classList.remove('flipped');
+                        }
                     });
                 }
-            }, 1500); // delay to let animation run first
-
         
-            // --- 3) Check game end ---
-            const totalMatches = (roomData.player1Score || 0) + (roomData.player2Score || 0);
-            if (totalMatches === totalPairs) {
-                setTimeout(() => showOnlineWinMessage(roomData), 500);
-            }
+                // Check game end
+                const totalMatches = (roomData.player1Score || 0) + (roomData.player2Score || 0);
+                if (totalMatches === totalPairs) {
+                    setTimeout(() => showOnlineWinMessage(roomData), 500);
+                }
+            }, 1200); // 1.2s delay ensures reveal finished before enforcing matched state
         }
 
 
@@ -831,17 +836,17 @@
             if (!canFlip || card.classList.contains('flipped') || card.classList.contains('matched')) {
                 return;
             }
-
+        
             const isMyTurn = (playerRole === 'player1' && currentPlayer === 'player1') || 
                             (playerRole === 'player2' && currentPlayer === 'player2');
             
             if (!isMyTurn) {
                 return;
             }
-
+        
             card.classList.add('flipped');
             flippedCards.push(card);
-
+        
             if (flippedCards.length === 2) {
                 canFlip = false;
                 const card1 = flippedCards[0];
@@ -850,47 +855,61 @@
                 const symbol2 = card2.dataset.symbol;
                 const index1 = parseInt(card1.dataset.index);
                 const index2 = parseInt(card2.dataset.index);
-
+        
                 const roomRef = window.firebaseRef(window.firebaseDb, 'rooms/' + currentRoomCode);
                 const snapshot = await window.firebaseGet(roomRef);
                 const roomData = snapshot.val();
-
+        
+                const scoreKey = playerRole === 'player1' ? 'player1Score' : 'player2Score';
+                const newScore = (roomData && roomData[scoreKey] ? roomData[scoreKey] : 0);
+        
                 if (symbol1 === symbol2) {
+                    // 1) Write lastMove+score to Firebase immediately so observers can reveal
+                    const lastMoveObj = {
+                        player: playerId,
+                        cards: [index1, index2],
+                        matched: true,
+                        time: Date.now()
+                    };
+        
+                    await window.firebaseUpdate(roomRef, {
+                        [scoreKey]: newScore + 1,
+                        lastMove: lastMoveObj,
+                        currentPlayer: playerRole // keep turn with same player for match
+                    });
+        
+                    // 2) Wait a bit so other clients see the reveal animation,
+                    //    then write matchedCards (so the cards actually disappear for everyone)
                     setTimeout(async () => {
-                        const matchedCards = roomData.matchedCards || [];
+                        const snap2 = await window.firebaseGet(roomRef);
+                        const roomData2 = snap2.val();
+                        const matchedCards = roomData2 && roomData2.matchedCards ? roomData2.matchedCards.slice() : [];
                         matchedCards.push(index1, index2);
-
-                        const scoreKey = playerRole === 'player1' ? 'player1Score' : 'player2Score';
-                        const newScore = (roomData[scoreKey] || 0) + 1;
-
                         await window.firebaseUpdate(roomRef, {
-                            [scoreKey]: newScore,
-                            matchedCards: matchedCards,
-                            lastMove: {
-                                player: playerId,
-                                cards: [index1, index2],
-                                matched: true
-                            },
-                            currentPlayer: playerRole // stays same turn on match
+                            matchedCards: matchedCards
                         });
-
-
+        
+                        // update local UI for the player who made the match
                         card1.classList.add('matched');
                         card2.classList.add('matched');
                         flippedCards = [];
                         canFlip = true;
-                    }, 500);
+                    }, 700); // 700 ms gives remote client time to animate
                 } else {
+                    // Not a match: flip back locally after small delay and hand turn to opponent
+                    const lastMoveObj = {
+                        player: playerId,
+                        cards: [index1, index2],
+                        matched: false,
+                        time: Date.now()
+                    };
+        
                     setTimeout(async () => {
                         await window.firebaseUpdate(roomRef, {
                             currentPlayer: playerRole === 'player1' ? 'player2' : 'player1',
-                            lastMove: {
-                                player: playerId,
-                                cards: [index1, index2],
-                                matched: false
-                            }
+                            lastMove: lastMoveObj
                         });
-
+        
                         card1.classList.remove('flipped');
                         card2.classList.remove('flipped');
                         flippedCards = [];
