@@ -773,17 +773,25 @@
                 // Find newly matched cards
                 const newlyMatched = [...currentMatched].filter(x => !previousMatched.has(x));
                 
-                // Animate only newly matched cards
-                newlyMatched.forEach(index => {
-                    const card = document.querySelector(`[data-index="${index}"]`);
-                    if (card && !card.classList.contains('matched')) {
-                        card.classList.add('flipped');
-                        setTimeout(() => {
-                            card.classList.add('matched');
-                            card.classList.remove('flipped');
-                        }, 800);
-                    }
-                });
+                // Check if these are part of the current opponent move
+                const isCurrentMove = roomData.lastMove && 
+                                     roomData.lastMove.player !== playerId && 
+                                     roomData.lastMove.matched;
+                
+                // Only animate newly matched cards if they're NOT the opponent's current move
+                // (because lastMove animation will handle those)
+                if (!isCurrentMove && newlyMatched.length > 0) {
+                    newlyMatched.forEach(index => {
+                        const card = document.querySelector(`[data-index="${index}"]`);
+                        if (card && !card.classList.contains('matched')) {
+                            card.classList.add('flipped');
+                            setTimeout(() => {
+                                card.classList.add('matched');
+                                card.classList.remove('flipped');
+                            }, 800);
+                        }
+                    });
+                }
                 
                 // Update tracking
                 previouslyMatchedCards = roomData.matchedCards;
@@ -801,7 +809,12 @@
                                 card2.classList.add('flipped');
                                 
                                 setTimeout(() => {
-                                    if (!card1.classList.contains('matched')) {
+                                    if (roomData.lastMove.matched) {
+                                        // If it was a match, add the matched class to make them disappear
+                                        card1.classList.add('matched');
+                                        card2.classList.add('matched');
+                                    } else {
+                                        // If not a match, flip them back
                                         card1.classList.remove('flipped');
                                         card2.classList.remove('flipped');
                                     }
