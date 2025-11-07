@@ -1123,15 +1123,13 @@ Result: ${myScore > theirScore ? 'You Win!' : theirScore > myScore ? 'You Lose!'
             const [card1, card2] = flippedCards;
             const symbol1 = card1.dataset.symbol;
             const symbol2 = card2.dataset.symbol;
-
+        
             if (symbol1 === symbol2) {
                 setTimeout(() => {
                     card1.classList.add('matched');
                     card2.classList.add('matched');
                     
-                    if (gameMode === 'solo') {
-                        moves++;
-                    } else {
+                    if (gameMode !== 'solo') {
                         if (currentPlayer === 'human') {
                             playerMatches++;
                             document.getElementById('playerScore').textContent = playerMatches;
@@ -1140,44 +1138,39 @@ Result: ${myScore > theirScore ? 'You Win!' : theirScore > myScore ? 'You Lose!'
                             document.getElementById('opponentScore').textContent = opponentMatches;
                         }
                     }
-                    
+        
                     flippedCards = [];
                     canFlip = true;
-
-                    const totalMatches = gameMode === 'solo' ? moves : (playerMatches + opponentMatches);
+        
+                    const totalMatches = document.querySelectorAll('.card.matched').length / 2;
                     if (totalMatches === totalPairs) {
                         setTimeout(() => showWinMessage(), 500);
-                    } else if (gameMode === 'vs') {
-                        if (currentPlayer === 'computer') {
-                            setTimeout(computerTurn, 1000);
-                        }
+                    } else if (gameMode === 'vs' && currentPlayer === 'computer') {
+                        setTimeout(computerTurn, 1000);
                     }
                 }, 500);
             } else {
                 turnNumber++;
-                
                 if (gameMode === 'solo') {
                     moves++;
                     document.getElementById('moves').textContent = moves;
                 }
-                
+        
                 setTimeout(() => {
                     card1.classList.remove('flipped');
                     card2.classList.remove('flipped');
                     flippedCards = [];
                     canFlip = true;
-
+        
                     if (gameMode === 'vs') {
                         currentPlayer = currentPlayer === 'human' ? 'computer' : 'human';
                         updateTurnIndicator();
-                        
-                        if (currentPlayer === 'computer') {
-                            setTimeout(computerTurn, 1000);
-                        }
+                        if (currentPlayer === 'computer') setTimeout(computerTurn, 1000);
                     }
                 }, 1000);
             }
         }
+
 
         function computerTurn() {
             if (currentPlayer !== 'computer' || !canFlip) return;
