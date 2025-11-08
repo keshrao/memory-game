@@ -766,69 +766,61 @@
             opponentMatches = theirScore;
         
             updateTurnIndicator();
-        
-            // Process lastMove first (if it's from the other player) and only once
+
             const lastMove = roomData.lastMove || null;
-            const lastMoveKey = lastMove ? `${lastMove.player}|${lastMove.cards?.join(',')}|${lastMove.time || ''}|${lastMove.matched}` : null;
+            const moveKey = lastMove ? `${lastMove.player}|${lastMove.cards?.join(',')}|${lastMove.matched}` : null;
+            if (lastMove && lastMove.player !== playerId && moveKey !== lastProcessedMove) {
+                lastProcessedMove = moveKey;
+                const [i1, i2] = lastMove.cards || [];
+                const c1 = document.querySelector(`[data-index="${i1}"]`);
+                const c2 = document.querySelector(`[data-index="${i2}"]`);
+                if (c1 && c2) {
+                    // always show reveal, even if matchedCards already includes them
+                    c1.classList.remove('matched');
+                    c2.classList.remove('matched');
+                    c1.classList.add('flipped');
+                    c2.classList.add('flipped');
         
-            if (lastMove && lastMove.player !== playerId && lastMoveKey !== lastProcessedMove) {
-                lastProcessedMove = lastMoveKey;
-        
-                const cardIndices = lastMove.cards;
-                if (cardIndices && cardIndices.length === 2) {
-                    const card1 = document.querySelector(`[data-index="${cardIndices[0]}"]`);
-                    const card2 = document.querySelector(`[data-index="${cardIndices[1]}"]`);
-        
-                    if (card1 && card2) {
-                        // If they are already marked matched, temporarily un-mark them so the flip is visible
-                        const wasMatched1 = card1.classList.contains('matched');
-                        const wasMatched2 = card2.classList.contains('matched');
-                        if (wasMatched1) card1.classList.remove('matched');
-                        if (wasMatched2) card2.classList.remove('matched');
-        
-                        // Ensure they flip up for the observer
-                        card1.classList.add('flipped');
-                        card2.classList.add('flipped');
-        
-                        if (lastMove.matched) {
-                            // show reveal briefly then mark matched visually
-                            setTimeout(() => {
-                                card1.classList.add('matched');
-                                card2.classList.add('matched');
-                            }, 700);
-                        } else {
-                            // not a match: flip back after showing
-                            setTimeout(() => {
-                                card1.classList.remove('flipped');
-                                card2.classList.remove('flipped');
-                            }, 1000);
-                        }
+                    if (lastMove.matched) {
+                        // pause to show reveal, then mark matched
+                        setTimeout(() => {
+                            c1.classList.add('matched');
+                            c2.classList.add('matched');
+                            c1.classList.remove('flipped');
+                            c2.classList.remove('flipped');
+                        }, 700);
+                    } else {
+                        setTimeout(() => {
+                            c1.classList.remove('flipped');
+                            c2.classList.remove('flipped');
+                        }, 1000);
                     }
+                }
+            } else if (lastMove && lastMove.player === playerId) {
+                // My own move came back from Firebase — just ensure those cards stay matched
+                if (lastMove.matched && Array.isArray(lastMove.cards)) {
+                    lastMove.cards.forEach(i => {
+                        const card = document.querySelector(`[data-index="${i}"]`);
+                        if (card) card.classList.add('matched');
+                    });
                 }
             }
         
-            // After the reveal has had time to run, make sure server's matchedCards array is applied
-            // Delay slightly so reveal animation completes (if any)
-            setTimeout(() => {
-                if (roomData.matchedCards && Array.isArray(roomData.matchedCards)) {
-                    roomData.matchedCards.forEach(index => {
-                        const card = document.querySelector(`[data-index="${index}"]`);
-                        if (card && !card.classList.contains('matched')) {
-                            card.classList.add('matched');
-                        }
-                        // also remove flipped if somehow left visible
-                        if (card && card.classList.contains('flipped') && card.classList.contains('matched')) {
-                            card.classList.remove('flipped');
-                        }
-                    });
-                }
+            // Apply matchedCards only for *other* already finished moves
+            if (roomData.matchedCards && Array.isArray(roomData.matchedCards)) {
+                roomData.matchedCards.forEach(idx => {
+                    // Skip cards from current lastMove.matched so animation can play
+                    if (lastMove?.matched && lastMove.cards?.includes(idx)) return;
+                    const card = document.querySelector(`[data-index="${idx}"]`);
+                    if (card && !card.classList.contains('matched')) card.classList.add('matched');
+                });
+            }
         
-                // Check game end
-                const totalMatches = (roomData.player1Score || 0) + (roomData.player2Score || 0);
-                if (totalMatches === totalPairs) {
-                    setTimeout(() => showOnlineWinMessage(roomData), 500);
-                }
-            }, 1200); // 1.2s delay ensures reveal finished before enforcing matched state
+            // check for end of game
+            const totalMatches = (roomData.player1Score || 0) + (roomData.player2Score || 0);
+            if (totalMatches === totalPairs) {
+                setTimeout(() => showOnlineWinMessage(roomData), 500);
+            }
         }
 
 
