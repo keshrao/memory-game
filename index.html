@@ -343,6 +343,96 @@
         .copy-btn.copied {
             background: #4CAF50;
         }
+        
+        /* === In-Game Chat (Vs Friend) === */
+        .chat-toggle {
+          position: fixed;
+          bottom: 18px;
+          right: 20px;
+          background: #333;
+          color: #fff;
+          width: 44px;
+          height: 44px;
+          border-radius: 50%;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 22px;
+          cursor: pointer;
+          box-shadow: 0 2px 6px rgba(0,0,0,0.4);
+          transition: transform 0.2s ease, background 0.3s ease;
+          z-index: 50;
+        }
+        .chat-toggle:hover { background: #444; transform: scale(1.05); }
+        .chat-toggle.notify::after {
+          content: "";
+          position: absolute;
+          top: 8px;
+          right: 8px;
+          width: 10px;
+          height: 10px;
+          background: #e74c3c;
+          border-radius: 50%;
+        }
+        .chat-window {
+          position: fixed;
+          bottom: 70px;
+          right: 20px;
+          width: 260px;
+          max-height: 330px;
+          display: flex;
+          flex-direction: column;
+          background: #222;
+          border-radius: 10px;
+          box-shadow: 0 0 8px rgba(0,0,0,0.5);
+          overflow: hidden;
+          z-index: 50;
+        }
+        .chat-window.hidden { display: none; }
+        #chat-header {
+          background: #333;
+          color: #fff;
+          padding: 6px 10px;
+          font-weight: 600;
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+        }
+        .chat-close { cursor: pointer; opacity: 0.7; }
+        .chat-close:hover { opacity: 1; }
+        #chat-messages {
+          flex: 1;
+          overflow-y: auto;
+          padding: 8px;
+          font-size: 14px;
+        }
+        .message {
+          margin-bottom: 4px;
+          line-height: 1.3;
+          word-wrap: break-word;
+        }
+        .message.me { text-align: right; color: #8ecaff; }
+        .message.them { text-align: left; color: #ccc; }
+        #chat-input-row {
+          display: flex;
+          border-top: 1px solid #444;
+        }
+        #chat-input {
+          flex: 1;
+          border: none;
+          background: #111;
+          color: #eee;
+          padding: 6px;
+          font-size: 14px;
+        }
+        #chat-send {
+          background: #555;
+          border: none;
+          color: #fff;
+          padding: 6px 10px;
+          cursor: pointer;
+        }
+        #chat-send:hover { background: #666; }
 
         @media (max-width: 600px) {
             .game-board {
@@ -459,7 +549,7 @@
 
     <!-- Win Message Modal -->
     <div class="modal" id="winMessage">
-        <h2 id="winTitle">🎉 Congratulations!</h2>
+        <h2 id="winTitle">Congratulations!</h2>
         <div id="winContent"></div>
         <div class="score-text" id="scoreText"></div>
         <div class="button-group">
@@ -470,7 +560,8 @@
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-app.js";
-        import { getDatabase, ref, set, onValue, update, remove, get } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-database.js";
+        import { getDatabase, ref, set, onValue, update, remove, get, push } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-database.js";
+
 
         const firebaseConfig = {
             apiKey: "AIzaSyBp8iDGPfzH84iGw0WGmDSp0QJfwTpTDdU",
@@ -493,6 +584,7 @@
         window.firebaseUpdate = update;
         window.firebaseRemove = remove;
         window.firebaseGet = get;
+        window.firebasePush = push;
 
         const themes = {
             fruits: ['🍎', '🍌', '🍇', '🍊', '🍓', '🍒', '🍑', '🥝', '🍉', '🍍', '🥭', '🍐', '🥥', '🍋', '🫐', '🍈', '🥑', '🍅'],
@@ -536,6 +628,75 @@
         let previouslyMatchedCards = [];
         let lastProcessedMove = null;
         
+        // === CHAT FEATURE (Vs Friend only) ===
+        let chatToggle, chatWindow, chatClose, chatMessages, chatInput, chatSend;
+        let unreadCount = 0;
+        let chatListenerAttached = false;
+        
+        // Initialize chat elements immediately (module scripts run after DOM loads)
+        chatToggle = document.getElementById('chat-toggle');
+        chatWindow = document.getElementById('chat-window');
+        chatClose = document.getElementById('chat-close');
+        chatMessages = document.getElementById('chat-messages');
+        chatInput = document.getElementById('chat-input');
+        chatSend = document.getElementById('chat-send');
+        
+        if (chatToggle && chatWindow && chatClose && chatInput && chatSend) {
+            chatToggle.onclick = () => {
+              chatWindow.classList.toggle('hidden');
+              if (!chatWindow.classList.contains('hidden')) {
+                unreadCount = 0;
+                chatToggle.classList.remove('notify');
+                if (chatMessages) chatMessages.scrollTop = chatMessages.scrollHeight;
+              }
+            };
+            chatClose.onclick = () => chatWindow.classList.add('hidden');
+            chatSend.onclick = sendChatMessage;
+            chatInput.addEventListener('keypress', e => { if (e.key === 'Enter') sendChatMessage(); });
+        }
+        
+        function sendChatMessage() {
+          if (!chatInput) return;
+          const text = chatInput.value.trim();
+          if (!text || !currentRoomCode) return;
+          const chatRef = window.firebaseRef(window.firebaseDb, `rooms/${currentRoomCode}/chat`);
+          window.firebasePush(chatRef, {
+            player: playerRole,
+            text,
+            time: Date.now()
+          });
+          chatInput.value = '';
+        }
+        
+        // Initialize listener once per room
+        function initChatListener(roomCode) {
+          if (chatListenerAttached || !chatToggle) return;
+          chatListenerAttached = true;
+          chatToggle.classList.remove('hidden');
+          const chatRef = window.firebaseRef(window.firebaseDb, `rooms/${roomCode}/chat`);
+          window.firebaseOnValue(chatRef, snapshot => {
+            if (!chatMessages) return;
+            const data = snapshot.val();
+            chatMessages.innerHTML = '';
+            if (data) {
+              const msgs = Object.values(data).sort((a,b) => a.time - b.time);
+              msgs.forEach(msg => {
+                const div = document.createElement('div');
+                div.classList.add('message');
+                div.classList.add(msg.player === playerRole ? 'me' : 'them');
+                div.textContent = msg.text;
+                chatMessages.appendChild(div);
+              });
+              chatMessages.scrollTop = chatMessages.scrollHeight;
+              const last = msgs[msgs.length - 1];
+              if (chatWindow.classList.contains('hidden') && last.player !== playerRole) {
+                unreadCount++;
+                chatToggle.classList.add('notify');
+              }
+            }
+          });
+        }
+        
         function generatePlayerId() {
             return 'player_' + Math.random().toString(36).substr(2, 9);
         }
@@ -558,6 +719,9 @@
                     roomListener();
                     currentRoomCode = null;
                 }
+                // Hide chat when switching away from vs-friend mode
+                if (chatToggle) chatToggle.classList.add('hidden');
+                if (chatWindow) chatWindow.classList.add('hidden');
                 initGame();
             }
         };
@@ -659,9 +823,12 @@
             currentRoomCode = null;
             document.getElementById('waitingModal').classList.remove('show');
             document.getElementById('modeSelect').value = 'solo';
+            // Hide chat when canceling online game
+            if (chatToggle) chatToggle.classList.add('hidden');
+            if (chatWindow) chatWindow.classList.add('hidden');
             initGame();
         };
-
+        
         window.copyRoomCode = function() {
             navigator.clipboard.writeText(currentRoomCode);
             const btn = event.target;
@@ -703,6 +870,8 @@
             onlineMode = true;
             gameMode = 'vs-friend';
             previouslyMatchedCards = [];
+            
+            initChatListener(currentRoomCode);
 
             document.getElementById('sizeSelect').value = roomData.gridSize;
             document.getElementById('themeSelect').value = roomData.theme;
@@ -797,7 +966,7 @@
                     }
                 }
             } else if (lastMove && lastMove.player === playerId) {
-                // My own move came back from Firebase — just ensure those cards stay matched
+                // My own move came back from Firebase â€” just ensure those cards stay matched
                 if (lastMove.matched && Array.isArray(lastMove.cards)) {
                     lastMove.cards.forEach(i => {
                         const card = document.querySelector(`[data-index="${i}"]`);
@@ -1038,6 +1207,10 @@ Result: ${myScore > theirScore ? 'You Win!' : theirScore > myScore ? 'You Lose!'
         }
 
         window.initGame = function() {
+            // Always hide chat UI first (will be shown only in vs-friend mode)
+            if (chatToggle) chatToggle.classList.add('hidden');
+            if (chatWindow) chatWindow.classList.add('hidden');
+            
             if (onlineMode) {
                 if (currentRoomCode) {
                     window.firebaseRemove(window.firebaseRef(window.firebaseDb, 'rooms/' + currentRoomCode));
@@ -1490,7 +1663,7 @@ Result: ${myScore > theirScore ? 'You Win!' : theirScore > myScore ? 'You Lose!'
                 const gridSize = document.getElementById('sizeSelect').value;
                 const theme = document.getElementById('themeSelect').options[document.getElementById('themeSelect').selectedIndex].text;
                 
-                winTitle.textContent = '🎉 Congratulations!';
+                winTitle.textContent = 'Congratulations!';
                 winContent.innerHTML = `
                     <p>You completed the game!</p>
                     <p>Time: ${elapsedTime}</p>
@@ -1498,11 +1671,11 @@ Result: ${myScore > theirScore ? 'You Win!' : theirScore > myScore ? 'You Lose!'
                 `;
                 
                 finalScoreText = `Memory Game - Solo Mode
-Grid: ${gridSize}
-Theme: ${theme}
-Time: ${elapsedTime}
-Moves: ${moves}`;
-            } else {
+                Grid: ${gridSize}
+                Theme: ${theme}
+                Time: ${elapsedTime}
+                Moves: ${moves}`;
+                } else {
                 const gridSize = document.getElementById('sizeSelect').value;
                 const theme = document.getElementById('themeSelect').options[document.getElementById('themeSelect').selectedIndex].text;
                 const difficultyText = difficulty.charAt(0).toUpperCase() + difficulty.slice(1);
@@ -1522,17 +1695,21 @@ Moves: ${moves}`;
                 `;
                 
                 finalScoreText = `Memory Game - VS ${difficultyText} Computer
-Grid: ${gridSize}
-Theme: ${theme}
-Final Score:
-  You: ${playerMatches}
-  Computer: ${opponentMatches}
-Result: ${playerMatches > opponentMatches ? 'You Win!' : opponentMatches > playerMatches ? 'Computer Wins!' : 'Tie!'}`;
-            }
+                Grid: ${gridSize}
+                Theme: ${theme}
+                Final Score:
+                  You: ${playerMatches}
+                  Computer: ${opponentMatches}
+                Result: ${playerMatches > opponentMatches ? 'You Win!' : opponentMatches > playerMatches ? 'Computer Wins!' : 'Tie!'}`;
+                            }
             
             scoreTextEl.textContent = finalScoreText;
             document.getElementById('winMessage').classList.add('show');
+            
+            if (chatWindow) chatWindow.classList.add('hidden');
+            if (chatToggle) chatToggle.classList.add('hidden');
         }
+
 
         window.copyScore = function() {
             navigator.clipboard.writeText(finalScoreText).then(() => {
@@ -1553,6 +1730,22 @@ Result: ${playerMatches > opponentMatches ? 'You Win!' : opponentMatches > playe
         setRandomTheme();
         setRandomGridSize();
         initGame();
+        
     </script>
+    
+    <!-- === Chat UI (Vs Friend mode only) === -->
+    <div id="chat-toggle" class="chat-toggle hidden" title="Chat">💬</div>
+    <div id="chat-window" class="chat-window hidden">
+      <div id="chat-header">
+        <span>Chat</span>
+        <span id="chat-close" class="chat-close">✖</span>
+      </div>
+      <div id="chat-messages"></div>
+      <div id="chat-input-row">
+        <input id="chat-input" type="text" placeholder="Type a message..." />
+        <button id="chat-send">Send</button>
+      </div>
+    </div>
+
 </body>
 </html>
